@@ -169,7 +169,6 @@ export function ClientProfileView({
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedInsightMachine, setSelectedInsightMachine] =
     useState<Machine | null>(null);
-  const [showFullMatrix, setShowFullMatrix] = useState(false);
   const [matrixRoutineFilter, setMatrixRoutineFilter] = useState<string>("all");
   const SESSIONS_PER_PAGE = 3;
 
@@ -383,87 +382,86 @@ export function ClientProfileView({
   useEffect(() => {
     if (!clientId || hasQuotaError) return;
 
-    // Only fetch primary overview data or routines data if on those tabs
-    const shouldFetch =
-      activeTab === "overview" ||
-      activeTab === "routines" ||
-      activeTab === "routines_setup";
-
-    const fetchData = async () => {
-      try {
-        // Fetch Routines
-        const routinesQuery = query(
-          collection(db, "routines"),
-          where("clientId", "==", clientId),
-        );
-        const routineSnap = await getDocs(routinesQuery);
-        const routinesData = routineSnap.docs.map(
-          (doc) => ({ id: doc.id, ...doc.data() }) as Routine,
-        );
-        setRoutines(routinesData);
-
-        // Initialize staged IDs
-        const initialStaged: Record<string, string[]> = {};
+    // Routines fetch (can stay as getDocs or become onSnapshot, let's keep getDocs for now or make it onSnapshot too)
+    const routinesQuery = query(
+      collection(db, "routines"),
+      where("clientId", "==", clientId),
+    );
+    const unsubRoutines = onSnapshot(routinesQuery, (snap) => {
+      const routinesData = snap.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() }) as Routine,
+      );
+      setRoutines(routinesData);
+      
+      setStagedMachineIds((prev) => {
+        const newStaged: Record<string, string[]> = { ...prev };
         routinesData.forEach((r) => {
-          initialStaged[r.name] = r.machineIds;
-        });
-        setStagedMachineIds((prev) => ({ ...initialStaged, ...prev }));
-
-        // Only fetch sessions/logs if needed for charts or history
-        if (
-          activeTab === "overview" ||
-          activeTab === "history" ||
-          activeTab === "timing"
-        ) {
-          // Fetch Recent Sessions
-          const sessionsQuery = query(
-            collection(db, "sessions"),
-            where("clientId", "==", clientId),
-            orderBy("date", "desc"),
-            limit(activeTab === "overview" ? 5 : sessionLimit),
-          );
-          const sessionSnap = await getDocs(sessionsQuery);
-          const sessionsData = sessionSnap.docs.map(
-            (doc) => ({ id: doc.id, ...doc.data() }) as WorkoutSession,
-          );
-          // Apply robust client-side sort to ensure chronological integrity
-          sessionsData.sort(
-            (a, b) => parseSessionDate(b.date) - parseSessionDate(a.date),
-          );
-          setSessions(sessionsData);
-
-          // Fetch exact logs for the fetched sessions
-          let allFetchedLogs: ExerciseLog[] = [];
-
-          if (sessionsData.length > 0) {
-            const sessionIds = sessionsData.map((s) => s.id!).filter(Boolean);
-            const chunks = [];
-            for (let i = 0; i < sessionIds.length; i += 10) {
-              chunks.push(sessionIds.slice(i, i + 10));
-            }
-
-            for (const chunk of chunks) {
-              const qs = query(
-                collection(db, "exerciseLogs"),
-                where("sessionId", "in", chunk),
-              );
-              const snap = await getDocs(qs);
-              allFetchedLogs = [
-                ...allFetchedLogs,
-                ...snap.docs.map(
-                  (doc) => ({ id: doc.id, ...doc.data() }) as ExerciseLog,
-                ),
-              ];
-            }
+          if (!prev[r.name]) {
+            newStaged[r.name] = r.machineIds;
           }
-          setAllLogs(allFetchedLogs);
-        }
-      } catch (error) {
-        handleFirestoreError(error, OperationType.GET, "multiple");
-      }
-    };
+        });
+        return newStaged;
+      });
+    }, (error) => handleFirestoreError(error, OperationType.GET, "routines"));
 
-    fetchData();
+    return () => unsubRoutines();
+  }, [clientId, hasQuotaError]);
+
+  useEffect(() => {
+    if (!clientId || hasQuotaError) return;
+
+    if (
+      activeTab !== "overview" &&
+      activeTab !== "history" &&
+      activeTab !== "timing"
+    ) {
+      return;
+    }
+
+    const sessionsQuery = query(
+      collection(db, "sessions"),
+      where("clientId", "==", clientId),
+      orderBy("date", "desc"),
+      limit(activeTab === "overview" ? 5 : sessionLimit),
+    );
+
+    const unsubSessions = onSnapshot(sessionsQuery, async (sessionSnap) => {
+      const sessionsData = sessionSnap.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() }) as WorkoutSession,
+      );
+      sessionsData.sort(
+        (a, b) => parseSessionDate(b.date) - parseSessionDate(a.date),
+      );
+      setSessions(sessionsData);
+
+      if (sessionsData.length > 0) {
+        const sessionIds = sessionsData.map((s) => s.id!).filter(Boolean);
+        const chunks = [];
+        for (let i = 0; i < sessionIds.length; i += 10) {
+          chunks.push(sessionIds.slice(i, i + 10));
+        }
+
+        let allFetchedLogs: ExerciseLog[] = [];
+        for (const chunk of chunks) {
+          const qs = query(
+            collection(db, "exerciseLogs"),
+            where("sessionId", "in", chunk),
+          );
+          const snap = await getDocs(qs);
+          allFetchedLogs = [
+            ...allFetchedLogs,
+            ...snap.docs.map(
+              (doc) => ({ id: doc.id, ...doc.data() }) as ExerciseLog,
+            ),
+          ];
+        }
+        setAllLogs(allFetchedLogs);
+      } else {
+        setAllLogs([]);
+      }
+    }, (error) => handleFirestoreError(error, OperationType.GET, "sessions"));
+
+    return () => unsubSessions();
   }, [clientId, sessionLimit, activeTab, hasQuotaError]);
 
   useEffect(() => {
@@ -998,7 +996,7 @@ export function ClientProfileView({
           className="mt-0 flex-1 overflow-hidden min-h-0 bg-white rounded-xl shadow-sm border border-slate-200 relative"
         >
           <Button
-            onClick={() => setShowFullMatrix(true)}
+            onClick={() => setShowFullChart(true)}
             size="sm"
             variant="outline"
             className="absolute top-1.5 right-1.5 z-10 h-6 px-2 text-[9px] uppercase font-black bg-[#115E8D]/80 hover:bg-white text-white hover:text-[#115E8D] border-white/30 backdrop-blur-sm shadow-sm"
@@ -2494,6 +2492,7 @@ export function ClientProfileView({
             clientId={clientId}
             clients={clients}
             machines={machines}
+            routines={routines}
             onBack={() => setShowFullChart(false)}
             user={user}
           />
@@ -2599,154 +2598,7 @@ export function ClientProfileView({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showFullMatrix} onOpenChange={setShowFullMatrix}>
-        <DialogContent className="max-w-[100vw] max-h-[100vh] w-screen h-screen m-0 p-4 sm:p-6 rounded-none sm:rounded-none border-none shadow-none bg-[#FAF9F6] overflow-hidden flex flex-col [&>button.absolute.right-4.top-4]:hidden focus:outline-none">
-          <DialogHeader className="shrink-0 mb-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 flex-wrap relative">
-              <DialogTitle className="text-xl sm:text-2xl font-black uppercase italic tracking-tighter text-[#115E8D]">
-                Expanded Machine Matrix
-              </DialogTitle>
-              <div className="flex gap-2 bg-white p-1 rounded-lg border border-slate-200 self-start">
-                <Button
-                  size="sm"
-                  variant={matrixRoutineFilter === "all" ? "default" : "ghost"}
-                  onClick={() => setMatrixRoutineFilter("all")}
-                  className={cn(
-                    "h-7 px-3 text-[10px] font-black uppercase tracking-widest",
-                    matrixRoutineFilter === "all"
-                      ? "bg-[#115E8D] hover:bg-[#115E8D]/90 text-white"
-                      : "text-[#68717A]",
-                  )}
-                >
-                  All
-                </Button>
-                <Button
-                  size="sm"
-                  variant={matrixRoutineFilter === "A" ? "default" : "ghost"}
-                  onClick={() => setMatrixRoutineFilter("A")}
-                  className={cn(
-                    "h-7 px-3 text-[10px] font-black uppercase tracking-widest",
-                    matrixRoutineFilter === "A"
-                      ? "bg-[#115E8D] hover:bg-[#115E8D]/90 text-white"
-                      : "text-[#68717A]",
-                  )}
-                >
-                  Routine A
-                </Button>
-                {client?.isRoutineBActive && (
-                  <Button
-                    size="sm"
-                    variant={matrixRoutineFilter === "B" ? "default" : "ghost"}
-                    onClick={() => setMatrixRoutineFilter("B")}
-                    className={cn(
-                      "h-7 px-3 text-[10px] font-black uppercase tracking-widest",
-                      matrixRoutineFilter === "B"
-                        ? "bg-[#115E8D] hover:bg-[#115E8D]/90 text-white"
-                        : "text-[#68717A]",
-                    )}
-                  >
-                    Routine B
-                  </Button>
-                )}
-              </div>
-              <Button
-                onClick={() => setShowFullMatrix(false)}
-                variant="ghost"
-                size="sm"
-                className="absolute -top-2 right-0 sm:top-0 sm:right-0 bg-slate-200 hover:bg-slate-300 text-slate-700 h-8 px-3 rounded-lg text-xs font-black uppercase"
-              >
-                Close
-              </Button>
-            </div>
-          </DialogHeader>
-          <div className="flex-1 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm relative">
-            <table className="w-full text-left border-collapse table-fixed select-none min-w-max">
-              <thead className="sticky top-0 z-30 shadow-sm">
-                <tr className="bg-[#115E8D] text-white uppercase text-[9px] font-black tracking-widest leading-none h-[32px]">
-                  <th className="p-2 pl-4 w-[150px] border-r border-[#115E8D]/20 truncate md:sticky left-0 bg-[#115E8D] z-40 shadow-[1px_0_0_rgba(255,255,255,0.1)]">
-                    Machine
-                  </th>
-                  {sessions
-                    .slice()
-                    .reverse()
-                    .map((s) => {
-                      const timestamp = parseSessionDate(s.date);
-                      return (
-                        <th
-                          key={s.id}
-                          className="p-2 text-center border-r border-[#115E8D]/20 truncate w-[80px] opacity-90 h-[32px]"
-                        >
-                          {timestamp > 0
-                            ? new Date(timestamp).toLocaleDateString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                              })
-                            : "--"}
-                        </th>
-                      );
-                    })}
-                </tr>
-              </thead>
-              <tbody className="text-[#115E8D] border-t border-slate-200 relative z-0">
-                {machines
-                  .sort((a, b) => (a.order || 0) - (b.order || 0))
-                  .filter((m) => {
-                    if (matrixRoutineFilter === "all") return true;
-                    // If filtering by A or B, check if it's in the respective routine
-                    const targetRoutine = routines.find(r => r.name === `Routine ${matrixRoutineFilter}`);
-                    return targetRoutine?.machineIds.includes(m.id!) || false;
-                  })
-                  .map((machine, idx) => {
-                    const machineLogs = allLogs.filter(
-                      (l) => l.machineId === machine.id,
-                    );
-                    const displaySessions = sessions.slice().reverse();
 
-                    return (
-                      <tr
-                        key={machine.id}
-                        className="even:bg-[#F9FAFB] odd:bg-white hover:bg-slate-50 cursor-pointer h-[36px] group border-b border-slate-100 last:border-b-0 transition-colors"
-                      >
-                        <td className="p-1.5 pl-4 border-r border-slate-200/60 truncate align-middle relative overflow-hidden md:sticky left-0 bg-inherit z-20 w-[150px] shadow-[1px_0_0_rgba(0,0,0,0.05)] text-left">
-                          <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#115E8D]/0 group-hover:bg-[#115E8D] transition-colors" />
-                          <div className="flex flex-col justify-center">
-                            <div className="flex items-center gap-1 max-w-full">
-                              <span className="font-bold text-[11px] text-[#115E8D] leading-none truncate block">
-                                {machine.name.split('-')[0].trim()}
-                              </span>
-                              {clientSettings[machine.id!]?.machineNotes?.some(
-                                (n) => n.isImportant,
-                              ) && (
-                                <AlertCircle className="w-3 h-3 text-red-500 shrink-0 inline-block align-middle" />
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        {displaySessions.map((s, sIdx) => {
-                          const log = machineLogs.find(
-                            (l) => l.sessionId === s.id,
-                          );
-
-                          return (
-                            <td
-                              key={s.id}
-                              className={cn(
-                                "p-1.5 text-center border-r border-slate-200/60 font-bold text-[11px] truncate align-middle w-[80px]",
-                                log ? "text-[#115E8D]" : "text-slate-300",
-                              )}
-                            >
-                              {log ? `${log.weight} × ${log.reps}` : "--"}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          </div>
-        </DialogContent>
-      </Dialog>
     </motion.div>
   );
 }

@@ -314,9 +314,9 @@ export function PreSessionOverview({
                         } border`}>
                           {focus.category}
                         </Badge>
-                        {focus.machineReference && (
+                        {focus.targetMachineId && (
                           <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
-                            {focus.machineReference}
+                            {machines.find(m => m.id === focus.targetMachineId)?.name || 'Directives'}
                           </span>
                         )}
                       </div>

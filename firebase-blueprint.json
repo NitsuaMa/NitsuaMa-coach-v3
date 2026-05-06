@@ -207,6 +207,23 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["clientId", "trainerId", "category", "notes"]
+    },
+    "FocusRecord": {
+      "title": "FocusRecord",
+      "description": "A clinical focus area assigned to a client by a trainer.",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "category": { "type": "string", "enum": ["Posture", "Pace", "Path", "Purpose"] },
+        "targetMachineId": { "type": "string" },
+        "clinicalNotes": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Achieved", "Deleted"] },
+        "assignedBy": { "type": "string", "description": "Trainer initials" },
+        "trainerId": { "type": "string" },
+        "dateAssigned": { "type": "string", "format": "date-time" },
+        "dateUpdated": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "category", "clinicalNotes", "status", "assignedBy", "trainerId"]
     }
   },
   "firestore": {
@@ -249,6 +266,10 @@
     "/trainerFocuses/{focusId}": {
       "schema": "TrainerFocus",
       "description": "Collection of trainer-specific client focuses"
+    },
+    "/focusRecords/{focusId}": {
+      "schema": "FocusRecord",
+      "description": "Collection of individual focus records for clients"
     }
   }
 }

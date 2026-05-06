@@ -342,12 +342,12 @@ export interface FocusRecord {
   clientId: string;
   category: FocusCategory;
   dateAssigned: any; // Timestamp or date string
-  assignedBy: string; // Trainer name
-  assignedById: string; // Trainer ID for reference
-  machineReference?: string; // Machine ID or Name
+  assignedBy: string; // Trainer initials
+  trainerId: string; // Trainer ID
+  targetMachineId?: string; // Machine ID
   clinicalNotes: string;
   status: FocusStatus;
-  achievedAt?: any;
+  dateUpdated?: any;
 }
 
 export interface TrainerFocus {

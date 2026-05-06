@@ -23,20 +23,36 @@ export async function calculateHighlightedMovements(clientId: string, machineIds
     const machineData = machineSnapshot.docs[0]?.data();
     const machineName = machineData?.fullName || machineData?.name || 'Unknown Machine';
 
-    // Get First Log
-    const firstLogQuery = query(
+    // Get All Logs for this machine to find min/max
+    const logsQuery = query(
       collection(db, 'exerciseLogs'),
       where('clientId', '==', clientId),
-      where('machineId', '==', machineId),
-      orderBy('createdAt', 'asc'),
-      limit(1)
+      where('machineId', '==', machineId)
     );
-    const firstLogSnap = await getDocs(firstLogQuery);
-    const firstLogData = firstLogSnap.docs[0]?.data();
-    const firstWeightRaw = parseFloat(firstLogData?.weight || '0');
-    const firstWeight = isNaN(firstWeightRaw) ? 0 : firstWeightRaw;
+    const logsSnap = await getDocs(logsQuery);
+    const allWeights = logsSnap.docs
+      .map(d => parseFloat(d.data().weight || '0'))
+      .filter(w => !isNaN(w) && w > 0);
 
-    // Get Recent Log
+    if (allWeights.length === 0) {
+      highlightedMovements.push({
+        machineId,
+        machineName,
+        startingWeight: 0,
+        currentWeight: 0,
+        currentReps: 0,
+        isStaticHold: false,
+        currentQuality: 'N/A',
+        change: 0,
+        percentageIncrease: 0
+      });
+      continue;
+    }
+
+    const firstWeight = Math.min(...allWeights);
+    const currentWeight = Math.max(...allWeights);
+    
+    // For reps/quality, we still might want the most recent log
     const recentLogQuery = query(
       collection(db, 'exerciseLogs'),
       where('clientId', '==', clientId),
@@ -46,8 +62,6 @@ export async function calculateHighlightedMovements(clientId: string, machineIds
     );
     const recentLogSnap = await getDocs(recentLogQuery);
     const recentData = recentLogSnap.docs[0]?.data();
-    const currentWeightRaw = parseFloat(recentData?.weight || '0');
-    const currentWeight = isNaN(currentWeightRaw) ? 0 : currentWeightRaw;
     const isStaticHold = recentData?.isStaticHold;
     const rawReps = isStaticHold ? parseFloat(recentData?.seconds || '0') : parseFloat(recentData?.reps || '0');
     const currentReps = isNaN(rawReps) ? 0 : rawReps;
@@ -230,13 +244,14 @@ export async function calculateDynamicHighlightMetrics(clientId: string, machine
 
   if (validLogs.length === 0) return null;
 
-  const firstLog = validLogs[0];
-  const lastLog = validLogs[validLogs.length - 1];
+  const weights = validLogs.map(l => parseFloat(l.weight || '0') || 0).filter(w => w > 0);
+  if (weights.length === 0) return null;
+
+  const startW = Math.min(...weights);
+  const currentW = Math.max(...weights);
 
   let percentageIncrease = 0;
-  const startW = parseFloat(firstLog.weight || '0') || 0;
-  const currentW = parseFloat(lastLog.weight || '0') || 0;
-  if (startW > 0 && currentW > 0 && currentW >= startW) {
+  if (startW > 0) {
     percentageIncrease = Math.round(((currentW - startW) / startW) * 100);
   }
 

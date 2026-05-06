@@ -4083,7 +4083,8 @@ function PerformanceEntryDialog({
   isStaticHold,
   side,
   onSave,
-  onClose
+  onClose,
+  machineSettings
 }: {
   machine: Machine;
   currentWeight: string;
@@ -4095,6 +4096,7 @@ function PerformanceEntryDialog({
   side?: 'Left' | 'Right';
   onSave: (weight: string, target: string, repsOrSeconds: string, quality: number, isHold: boolean, side?: 'Left' | 'Right') => void;
   onClose: () => void;
+  machineSettings?: ClientMachineSetting;
 }) {
   const prevLog = pastMachineLogs[0]?.log;
   const prevWeight = prevLog?.weight || '0';
@@ -4117,34 +4119,54 @@ function PerformanceEntryDialog({
   const weightDelta = prevW > 0 ? current - prevW : 0;
   const weightDeltaPct = prevW > 0 ? ((weightDelta / prevW) * 100).toFixed(1) : "0.0";
 
+  const settings = machineSettings?.settings || {};
+  const hasSettings = Object.keys(settings).length > 0;
+
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[420px] rounded-[32px] p-0 overflow-hidden border-slate-700 bg-slate-900 shadow-2xl">
-        <div className="bg-slate-800 p-6 text-white relative overflow-hidden border-b border-slate-700">
+      <DialogContent className="sm:max-w-[400px] rounded-[32px] p-0 overflow-hidden border-slate-700 bg-slate-900 shadow-2xl flex flex-col h-full max-h-[85vh] sm:max-h-[600px]">
+        {/* Header */}
+        <div className="bg-slate-800 p-4 text-white relative overflow-hidden border-b border-slate-700 shrink-0">
           <div className="absolute top-0 right-0 p-8 opacity-5 rotate-12">
             <Zap className="w-24 h-24" />
           </div>
-          <div className="flex items-center gap-4 relative z-10">
-            <div className="w-12 h-12 bg-slate-700 rounded-2xl flex items-center justify-center shrink-0">
-              <Zap className="w-6 h-6 text-[#38BDF8]" />
+          <div className="flex items-center gap-3 relative z-10">
+            <div className="w-10 h-10 bg-slate-700 rounded-xl flex items-center justify-center shrink-0">
+              <Zap className="w-5 h-5 text-[#38BDF8]" />
             </div>
-            <div>
-              <h2 className="text-2xl font-black italic uppercase tracking-tight leading-none">{machine.name}</h2>
-              {side && <span className="text-[#F06C22] text-[10px] font-black uppercase tracking-widest mt-1 block">Rotation: {side}</span>}
-              <p className="text-[10px] uppercase font-bold text-[#38BDF8] tracking-widest mt-1">Smart Entry HUD</p>
+            <div className="min-w-0">
+              <h2 className="text-xl font-black italic uppercase tracking-tight leading-none truncate">{machine.name}</h2>
+              <div className="flex items-center gap-2 mt-1">
+                {side && <span className="text-[#F06C22] text-[9px] font-black uppercase tracking-widest leading-none">Rotation: {side}</span>}
+                {side && <span className="w-1 h-1 bg-slate-600 rounded-full" />}
+                <p className="text-[9px] uppercase font-bold text-[#38BDF8] tracking-widest leading-none">Entry HUD</p>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+          {/* Settings Shorthand Bar */}
+          {hasSettings && (
+            <div className="bg-slate-950/40 border border-slate-800 rounded-2xl px-4 py-2.5 flex items-center justify-center gap-x-5 gap-y-1.5 flex-wrap">
+              {Object.entries(settings).map(([key, value]) => (
+                <div key={key} className="flex items-center gap-1.5">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">{key}:</span>
+                  <span className="text-[12px] font-black text-[#F06C22] italic">{value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Smart Stepper: Weight */}
-          <div className="bg-slate-800 border border-slate-700 rounded-3xl p-4 sm:p-5 flex flex-col items-center shadow-lg relative">
-            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest text-center block mb-4">
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-3 flex flex-col items-center relative">
+            <Label className="text-[9px] font-black uppercase text-slate-500 tracking-widest text-center block mb-2">
               Weight (lbs)
             </Label>
-            <div className="flex items-center justify-between w-full h-24 px-2">
+            <div className="flex items-center justify-between w-full h-14 px-1">
               <button 
-                className="w-16 h-16 rounded-2xl bg-slate-700 text-slate-300 font-black text-2xl flex items-center justify-center active:scale-95 transition-transform"
+                className="w-11 h-11 rounded-xl bg-slate-700/50 text-slate-400 font-black text-lg flex items-center justify-center active:scale-95 transition-transform border border-slate-600/30"
                 onClick={() => adjustCurrent(-2)}
               >
                 -2
@@ -4156,17 +4178,17 @@ function PerformanceEntryDialog({
                   inputMode="decimal"
                   value={current || ''}
                   onChange={e => setCurrent(parseFloat(e.target.value) || 0)}
-                  className="font-black text-6xl text-white tracking-tighter leading-none bg-transparent border-none text-center outline-none w-full p-0 m-0 no-arrows focus:ring-0"
+                  className="font-black text-5xl text-white tracking-tighter leading-none bg-transparent border-none text-center outline-none w-full p-0 m-0 no-arrows focus:ring-0"
                 />
                 {prevW > 0 && (
-                  <div className={`mt-2 text-[11px] font-black uppercase px-2 py-0.5 rounded-md ${weightDelta > 0 ? 'bg-emerald-500/20 text-emerald-400' : weightDelta < 0 ? 'bg-rose-500/20 text-rose-400' : 'bg-slate-700 text-slate-400'}`}>
+                  <div className={`mt-0.5 text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md ${weightDelta > 0 ? 'bg-emerald-500/20 text-emerald-400' : weightDelta < 0 ? 'bg-rose-500/20 text-rose-400' : 'bg-slate-700 text-slate-500'}`}>
                     {weightDelta > 0 ? '+' : ''}{weightDelta} lbs ({weightDelta > 0 ? '+' : ''}{weightDeltaPct}%)
                   </div>
                 )}
               </div>
 
               <button 
-                className="w-16 h-16 rounded-2xl bg-[#F06C22] text-white font-black text-2xl flex items-center justify-center shadow-[0_0_15px_rgba(240,108,34,0.4)] active:scale-95 transition-transform"
+                className="w-11 h-11 rounded-xl bg-[#F06C22] text-white font-black text-lg flex items-center justify-center shadow-[0_4px_12px_rgba(240,108,34,0.3)] active:scale-95 transition-transform"
                 onClick={() => adjustCurrent(2)}
               >
                 +2
@@ -4174,83 +4196,116 @@ function PerformanceEntryDialog({
             </div>
           </div>
 
-          {/* Smart Stepper: Reps / Seconds */}
-          <div className="bg-slate-800 border border-slate-700 rounded-3xl p-4 sm:p-5 flex flex-col items-center shadow-lg relative">
-            <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-xl p-1 mb-4 w-full max-w-[240px]">
-              <button 
-                onClick={() => setIsHold(false)}
-                className={`flex-1 h-9 rounded-lg font-black uppercase text-[10px] tracking-widest transition-all ${!isHold ? 'bg-[#38BDF8] text-white shadow-[0_0_10px_rgba(56,189,248,0.3)]' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                [ REPS ]
-              </button>
-              <button 
-                onClick={() => setIsHold(true)}
-                className={`flex-1 h-9 rounded-lg font-black uppercase text-[10px] tracking-widest transition-all ${isHold ? 'bg-[#38BDF8] text-white shadow-[0_0_10px_rgba(56,189,248,0.3)]' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                [ TSC (TIME) ]
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between w-full h-20 px-2">
-              <button 
-                className="w-14 h-14 rounded-2xl bg-slate-700 text-slate-300 font-black text-2xl flex items-center justify-center active:scale-95 transition-transform"
-                onClick={() => adjustReps(-1)}
-              >
-                -1
-              </button>
-              
-              <div className="flex flex-col items-center justify-center flex-1">
-                <input 
-                  type="number"
-                  inputMode="numeric"
-                  value={reps || ''}
-                  onChange={e => setReps(parseFloat(e.target.value) || 0)}
-                  className="font-black text-5xl text-white tracking-tight leading-none bg-transparent border-none text-center outline-none w-full p-0 m-0 no-arrows focus:ring-0"
-                />
+          <div className="grid grid-cols-1 gap-4">
+            {/* Smart Stepper: Reps / Seconds */}
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-3 flex flex-col items-center relative">
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/50 rounded-xl p-1 mb-2.5 w-full max-w-[180px]">
+                <button 
+                  onClick={() => setIsHold(false)}
+                  className={`flex-1 h-6 rounded-lg font-black uppercase text-[8px] tracking-widest transition-all ${!isHold ? 'bg-[#38BDF8] text-white' : 'text-slate-600 hover:text-slate-400'}`}
+                >
+                  REPS
+                </button>
+                <button 
+                  onClick={() => setIsHold(true)}
+                  className={`flex-1 h-6 rounded-lg font-black uppercase text-[8px] tracking-widest transition-all ${isHold ? 'bg-[#38BDF8] text-white' : 'text-slate-600 hover:text-slate-400'}`}
+                >
+                  TSC
+                </button>
               </div>
 
-              <button 
-                className="w-14 h-14 rounded-2xl bg-[#38BDF8] text-white font-black text-2xl flex items-center justify-center shadow-[0_0_15px_rgba(56,189,248,0.4)] active:scale-95 transition-transform"
-                onClick={() => adjustReps(1)}
-              >
-                +1
-              </button>
+              <div className="flex items-center justify-between w-full h-12 px-1">
+                <button 
+                  className="w-10 h-10 rounded-xl bg-slate-700/50 text-slate-400 font-black text-lg flex items-center justify-center active:scale-95 transition-transform border border-slate-600/30"
+                  onClick={() => adjustReps(-1)}
+                >
+                  -1
+                </button>
+                
+                <div className="flex flex-col items-center justify-center flex-1">
+                  <input 
+                    type="number"
+                    inputMode="numeric"
+                    value={reps || ''}
+                    onChange={e => setReps(parseFloat(e.target.value) || 0)}
+                    className="font-black text-4xl text-white tracking-tight leading-none bg-transparent border-none text-center outline-none w-full p-0 m-0 no-arrows focus:ring-0"
+                  />
+                </div>
+
+                <button 
+                  className="w-10 h-10 rounded-xl bg-[#38BDF8] text-white font-black text-lg flex items-center justify-center shadow-[0_4px_12px_rgba(56,189,248,0.3)] active:scale-95 transition-transform"
+                  onClick={() => adjustReps(1)}
+                >
+                  +1
+                </button>
+              </div>
+            </div>
+
+            {/* Quality Rating */}
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-3 flex flex-col items-center relative">
+              <Label className="text-[9px] font-black uppercase text-slate-500 tracking-widest text-center block mb-2.5">
+                Set Quality / RPE
+              </Label>
+              <div className="flex items-center gap-1.5 w-full h-9">
+                <button 
+                  onClick={() => setQuality(1)}
+                  className={`flex-1 h-full rounded-xl font-black uppercase text-[9px] tracking-widest transition-all ${quality === 1 ? 'bg-rose-500 text-white shadow-[0_4px_10px_rgba(244,63,94,0.3)]' : 'bg-slate-900 border border-slate-700/50 text-slate-600 hover:text-slate-400'}`}
+                >
+                  Poor
+                </button>
+                <button 
+                  onClick={() => setQuality(2)}
+                  className={`flex-1 h-full rounded-xl font-black uppercase text-[9px] tracking-widest transition-all ${quality === 2 ? 'bg-amber-500 text-white shadow-[0_4px_10px_rgba(245,158,11,0.3)]' : 'bg-slate-900 border border-slate-700/50 text-slate-600 hover:text-slate-400'}`}
+                >
+                  Good
+                </button>
+                <button 
+                  onClick={() => setQuality(3)}
+                  className={`flex-1 h-full rounded-xl font-black uppercase text-[9px] tracking-widest transition-all ${quality === 3 ? 'bg-emerald-500 text-white shadow-[0_4px_10px_rgba(16,185,129,0.3)]' : 'bg-slate-900 border border-slate-700/50 text-slate-600 hover:text-slate-400'}`}
+                >
+                  Elite
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Trend History */}
           {pastMachineLogs.length > 0 && (
-            <div className="bg-slate-900/50 border border-slate-700 rounded-md p-3 flex flex-col gap-2">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Trend History</span>
+            <div className="bg-slate-950/30 border border-slate-800/50 rounded-xl p-2.5 flex flex-col gap-1.5">
+              <div className="flex justify-between items-center px-1">
+                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Trend History</span>
+                <span className="text-[8px] font-bold text-slate-600 uppercase tracking-widest">Last 3 Sets</span>
+              </div>
               {pastMachineLogs.map((entry, idx) => {
                 const isHoldLog = entry.log.isStaticHold;
                 let metrics = "";
                 if (entry.log.repsLeft !== undefined && entry.log.repsRight !== undefined) {
                   metrics = `${entry.log.repsLeft}L|${entry.log.repsRight}R`;
                 } else {
-                  metrics = isHoldLog ? `${entry.log.seconds}s` : `${entry.log.reps} REPS`;
+                  metrics = isHoldLog ? `${entry.log.seconds}s` : `${entry.log.reps}R`;
                 }
                 
-                // Compare to the previous entry chronologically (idx + 1)
                 const olderEntry = pastMachineLogs[idx + 1];
                 let arrow = null;
                 if (olderEntry && olderEntry.log.weight) {
                   const currW = parseFloat(entry.log.weight || '0');
                   const oldW = parseFloat(olderEntry.log.weight || '0');
                   if (currW > oldW) {
-                    arrow = <span className="text-emerald-400 font-bold ml-1">↑</span>;
+                    arrow = <span className="text-emerald-500 font-bold ml-1 text-[9px]">↑</span>;
                   } else if (currW < oldW) {
-                    arrow = <span className="text-rose-400 font-bold ml-1">↓</span>;
+                    arrow = <span className="text-rose-500 font-bold ml-1 text-[9px]">↓</span>;
                   }
                 }
 
                 return (
-                  <div key={idx} className="flex justify-between items-center text-xs">
-                    <span className="text-slate-500 font-medium">
+                  <div key={idx} className="flex justify-between items-center text-[11px] bg-slate-900/40 rounded-lg px-2 py-1.5 border border-slate-800/30">
+                    <span className="text-slate-500 font-bold uppercase text-[9px]">
                       {new Date(entry.session.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
-                    <span className="font-bold text-white flex items-center">
-                      {entry.log.weight} LBS | {metrics}
+                    <span className="font-black text-slate-200 flex items-center tabular-nums">
+                      {entry.log.weight}<span className="text-[9px] text-slate-500 ml-0.5">lbs</span> 
+                      <span className="mx-1.5 text-slate-700">|</span> 
+                      {metrics}
                       {arrow}
                     </span>
                   </div>
@@ -4258,47 +4313,22 @@ function PerformanceEntryDialog({
               })}
             </div>
           )}
+        </div>
 
-          {/* Quality Rating Segmented Control */}
-          <div className="bg-slate-800 border border-slate-700 rounded-3xl p-4 sm:p-5 flex flex-col items-center shadow-lg relative">
-            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest text-center block mb-4">
-              Set Quality / RPE
-            </Label>
-            <div className="flex items-center gap-2 w-full h-14">
-              <button 
-                onClick={() => setQuality(1)}
-                className={`flex-1 h-full rounded-2xl font-black uppercase text-xs tracking-widest transition-all ${quality === 1 ? 'bg-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.4)] border-none' : 'bg-slate-900 border-2 border-slate-700 text-slate-500 hover:text-slate-400'}`}
-              >
-                Poor
-              </button>
-              <button 
-                onClick={() => setQuality(2)}
-                className={`flex-1 h-full rounded-2xl font-black uppercase text-xs tracking-widest transition-all ${quality === 2 ? 'bg-amber-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.4)] border-none' : 'bg-slate-900 border-2 border-slate-700 text-slate-500 hover:text-slate-400'}`}
-              >
-                Good
-              </button>
-              <button 
-                onClick={() => setQuality(3)}
-                className={`flex-1 h-full rounded-2xl font-black uppercase text-xs tracking-widest transition-all ${quality === 3 ? 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)] border-none' : 'bg-slate-900 border-2 border-slate-700 text-slate-500 hover:text-slate-400'}`}
-              >
-                Elite
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 pt-2">
-            <Button variant="outline" className="h-16 rounded-2xl font-black uppercase tracking-widest border-2 border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button className="h-16 rounded-2xl font-black uppercase tracking-widest bg-[#F06C22] text-white hover:bg-[#ea580c] shadow-[0_0_20px_rgba(240,108,34,0.4)] border-none" onClick={() => onSave(current.toString(), currentNextWeight || current.toString(), reps.toString(), quality, isHold, side)}>
-              Save Set
-            </Button>
-          </div>
+        {/* Fixed Footer */}
+        <div className="p-4 bg-slate-800 border-t border-slate-700 shrink-0 grid grid-cols-2 gap-3 shadow-[0_-10px_20px_rgba(0,0,0,0.2)]">
+          <Button variant="outline" className="h-12 rounded-xl font-black uppercase text-[11px] tracking-widest border border-slate-600 bg-slate-700/50 text-slate-300 hover:bg-slate-700 hover:text-white transition-all shadow-md" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button className="h-12 rounded-xl font-black uppercase text-[11px] tracking-widest bg-[#F06C22] text-white hover:bg-[#ea580c] shadow-[0_4px_15px_rgba(240,108,34,0.4)] border-none active:scale-95 transition-all" onClick={() => onSave(current.toString(), currentNextWeight || current.toString(), reps.toString(), quality, isHold, side)}>
+            Save Set
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
+
 
 function MachinesView({ machines, clients, onOpenInfo }: { machines: Machine[], clients: Client[], onOpenInfo: (machine: Machine) => void }) {
   const [allLogs, setAllLogs] = useState<ExerciseLog[]>([]);
@@ -5752,6 +5782,7 @@ function WorkoutTrackerView({
         <PerformanceEntryDialog 
           machine={machines.find(m => m.id === editingWeightMachineId)!}
           side={editingWeightSide}
+          machineSettings={clientMachineSettings[editingWeightMachineId]}
           currentWeight={logs[`${currentSession.id}_${editingWeightMachineId}${editingWeightSide ? '_' + editingWeightSide : ''}`]?.weight || '0'}
           currentNextWeight={logs[`${currentSession.id}_${editingWeightMachineId}${editingWeightSide ? '_' + editingWeightSide : ''}`]?.targetWeight || ''}
           currentReps={logs[`${currentSession.id}_${editingWeightMachineId}${editingWeightSide ? '_' + editingWeightSide : ''}`]?.isStaticHold ? (logs[`${currentSession.id}_${editingWeightMachineId}${editingWeightSide ? '_' + editingWeightSide : ''}`]?.seconds || '0') : (logs[`${currentSession.id}_${editingWeightMachineId}${editingWeightSide ? '_' + editingWeightSide : ''}`]?.reps || '0')}

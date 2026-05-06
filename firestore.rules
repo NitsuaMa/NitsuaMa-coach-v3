@@ -241,6 +241,19 @@ service cloud.firestore {
              (!('createdAt' in data) || data.createdAt == null || data.createdAt is timestamp);
     }
 
+    function isValidFocusRecord(data) {
+      return hasRequiredFields(['clientId', 'category', 'clinicalNotes', 'status', 'assignedBy', 'trainerId']) &&
+             data.clientId is string &&
+             data.category in ['Posture', 'Pace', 'Path', 'Purpose'] &&
+             data.clinicalNotes is string && data.clinicalNotes.size() <= 2000 &&
+             data.status in ['Active', 'Achieved', 'Deleted'] &&
+             data.assignedBy is string &&
+             data.trainerId is string &&
+             (!('targetMachineId' in data) || data.targetMachineId == null || data.targetMachineId is string) &&
+             (!('dateAssigned' in data) || data.dateAssigned is timestamp) &&
+             (!('dateUpdated' in data) || data.dateUpdated is timestamp);
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -329,6 +342,12 @@ service cloud.firestore {
     match /progressReports/{reportId} {
       allow read: if isAuthenticated();
       allow create, update: if (isAdmin() || isTrainer()) && isValidProgressReport(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /focusRecords/{focusId} {
+      allow read: if isAuthenticated();
+      allow create, update: if (isAdmin() || isTrainer()) && isValidFocusRecord(request.resource.data);
       allow delete: if isAdmin();
     }
     match /aggregations/{aggId} {
