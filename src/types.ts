@@ -303,24 +303,10 @@ export interface ProgressReport {
     };
   };
 
-  // Step 4: The Roadmap
-  roadmap: {
-    anchorCategory: 'weight_loss' | 'pain_free' | 'athletic_performance' | 'general_longevity' | 'eih_management';
-    emotionalAnchor: string;
-    smartGoal: string;
-    prescriptionType: 'quantitative' | 'qualitative';
-    inStudioPrescription: {
-      targetMachine: string;
-      targetMetric: string;
-      qualitativeFocus: string;
-      timeframe: string;
-    };
-  };
-
-  // Deprecated, keep for backward compatibility with old reports
-  milestones?: {
+  // Step 4: The Past (Milestones)
+  milestones: {
     originalWhy: string;
-    smartGoal: string;
+    smartGoal: string; // "Skiing trip ready by [Date]"
   };
 
   // Step 5: The Future
@@ -328,12 +314,41 @@ export interface ProgressReport {
     primaryPlan: string; // "Routine Mastery"
     focusAreas: string; // "Immediate machine focus..."
   };
+  
+  roadmap?: {
+    anchorCategory: 'weight_loss' | 'eih_management' | 'general_conditioning';
+    emotionalAnchor: string;
+    smartGoal: string;
+    prescriptionType: 'quantitative' | 'qualitative';
+    inStudioPrescription: {
+      targetMachine: string;
+      targetMetric?: string;
+      qualitativeFocus?: string;
+      timeframe: string;
+    };
+  };
+
   trainerNotes?: string;
 
   createdAt: any;
 }
 
-export type FocusCategory = 'Path' | 'Pace' | 'Posture' | 'Purpose';
+export type FocusCategory = 'Posture' | 'Pace' | 'Path' | 'Purpose';
+
+export type FocusStatus = 'Active' | 'Achieved' | 'Deleted';
+
+export interface FocusRecord {
+  id: string;
+  clientId: string;
+  category: FocusCategory;
+  dateAssigned: any; // Timestamp or date string
+  assignedBy: string; // Trainer name
+  assignedById: string; // Trainer ID for reference
+  machineReference?: string; // Machine ID or Name
+  clinicalNotes: string;
+  status: FocusStatus;
+  achievedAt?: any;
+}
 
 export interface TrainerFocus {
   id?: string;

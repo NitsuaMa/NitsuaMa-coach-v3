@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { SessionRoutineManagerModal } from './SessionRoutineManagerModal';
 import { MACHINE_LIST } from '../data/machine-database';
-import { Client, Machine, ExerciseLog, Routine, WorkoutSession, TrainerFocus, SessionNote, Trainer } from '../types';
+import { Client, Machine, ExerciseLog, Routine, WorkoutSession, TrainerFocus, SessionNote, Trainer, FocusRecord } from '../types';
 
 interface PreSessionOverviewProps {
   authTrainer: Trainer | null;
@@ -20,6 +20,7 @@ interface PreSessionOverviewProps {
   onCancel: () => void;
   routines: Routine[];
   trainerFocuses: TrainerFocus[];
+  focusRecords?: FocusRecord[]; // Added optional FocusRecords
   sessionNotes: SessionNote[];
   logs?: ExerciseLog[];
 }
@@ -35,6 +36,7 @@ export function PreSessionOverview({
   machines,
   routines,
   trainerFocuses,
+  focusRecords = [], // Default to empty array
   sessionNotes,
   logs = []
 }: PreSessionOverviewProps & { machines: Machine[] }) {
@@ -291,24 +293,61 @@ export function PreSessionOverview({
         {/* Right Column (Focus & Notes) */}
         <div className="lg:col-span-4 flex flex-col gap-6">
           
-          {/* 5. Trainer Focuses */}
+          {/* 5. Trainer Focuses & Active Directives */}
           <div className="bg-slate-800 border border-slate-700 rounded-[2rem] p-6 shadow-lg">
              <span className="text-[10px] font-black uppercase tracking-widest text-[#38BDF8] flex items-center gap-2 mb-4">
-               <Activity className="w-3.5 h-3.5" /> Overarching Goals
+               <Activity className="w-3.5 h-3.5" /> 4 P's Directives
              </span>
-             <h3 className="text-xl font-black text-white mb-4">Trainer Focuses</h3>
-             {trainerFocuses.length > 0 ? (
-               <ul className="space-y-3">
-                 {trainerFocuses.map(focus => (
-                   <li key={focus.id} className="text-sm font-medium text-slate-300 bg-slate-900/50 p-3 rounded-xl border border-slate-700/50 leading-relaxed">
-                     <span className="font-bold text-[#38BDF8] block mb-1">{focus.category}</span>
-                     {focus.notes}
-                   </li>
-                 ))}
-               </ul>
-             ) : (
-               <p className="text-sm text-slate-500 italic font-medium">No active focuses set for this client.</p>
-             )}
+             <h3 className="text-xl font-black text-white mb-4">Focus Dashboard</h3>
+             
+             {/* Active FocusRecords (The new system) */}
+             <div className="space-y-4">
+               {focusRecords.filter(f => f.clientId === client.id && f.status === 'Active').length > 0 ? (
+                 focusRecords.filter(f => f.clientId === client.id && f.status === 'Active').map(focus => (
+                    <div key={focus.id} className="bg-slate-900/80 p-4 rounded-2xl border border-slate-700 shadow-inner group transition-all hover:bg-slate-900">
+                      <div className="flex items-center justify-between mb-2">
+                        <Badge className={`text-[8px] font-black uppercase italic tracking-widest px-2 py-0.5 rounded-lg ${
+                          focus.category === 'Posture' ? 'bg-sky-500/20 text-sky-400 border-sky-500/30' :
+                          focus.category === 'Pace' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
+                          focus.category === 'Path' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
+                          'bg-violet-500/20 text-violet-400 border-violet-500/30'
+                        } border`}>
+                          {focus.category}
+                        </Badge>
+                        {focus.machineReference && (
+                          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+                            {focus.machineReference}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm font-bold text-slate-200 leading-relaxed italic">
+                        "{focus.clinicalNotes}"
+                      </p>
+                      <div className="mt-3 flex items-center justify-between text-[8px] font-black uppercase tracking-widest text-slate-500">
+                        <span>Assign: {focus.assignedBy}</span>
+                        <span>{focus.dateAssigned?.toDate ? new Date(focus.dateAssigned.toDate()).toLocaleDateString() : 'Active'}</span>
+                      </div>
+                    </div>
+                 ))
+               ) : (
+                 trainerFocuses.length === 0 && (
+                   <p className="text-sm text-slate-500 italic font-medium">No active focus directives.</p>
+                 )
+               )}
+
+               {/* Legacy TrainerFocuses (if any) */}
+               {trainerFocuses.length > 0 && (
+                 <ul className="space-y-3 pt-2 border-t border-slate-700/50 mt-4">
+                   <p className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-600 mb-2">Extended Goals</p>
+                   {trainerFocuses.map(focus => (
+                     <li key={focus.id} className="text-xs font-medium text-slate-400 bg-slate-900/30 p-3 rounded-xl border border-slate-700/50 leading-relaxed">
+                       <span className="font-bold text-slate-500 block mb-1 uppercase tracking-tighter">{focus.category}</span>
+                       {focus.notes}
+                     </li>
+                   ))}
+                 </ul>
+               )}
+             </div>
           </div>
 
           {/* 6. Prioritized Notes (Moved to Bottom) */}

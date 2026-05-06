@@ -19,6 +19,8 @@ import {
   Binary,
   Map as MapIcon,
   Crosshair,
+  Dumbbell,
+  Info,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -220,6 +222,18 @@ export function ClientProgressReportView({
       primaryPlan: "Routine Mastery",
       focusAreas:
         "The Next 6 Months: We will transition to Routine B, increasing time-under-tension by 10% to fortify your lumbar spine and ensure your 'Why' becomes a permanent reality.",
+    },
+    roadmap: {
+      anchorCategory: "general_conditioning",
+      emotionalAnchor: client.globalNotes || "",
+      smartGoal: "",
+      prescriptionType: "qualitative",
+      inStudioPrescription: {
+        targetMachine: machines[0]?.id || "m-leg-press",
+        targetMetric: "",
+        qualitativeFocus: "",
+        timeframe: "Next 12 Weeks",
+      },
     },
     trainerNotes: "",
     createdAt: null,
@@ -1597,7 +1611,7 @@ export function ClientProgressReportView({
             )}
           </section>
 
-          {/* Section 4: Roadmap */}
+          {/* Section 4: Roadmap (MSF Evolution) */}
           <section className="bg-white rounded-[40px] p-8 shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 left-0 w-2 h-full bg-[#F06C22]" />
             <div className="flex items-center gap-3 mb-8">
@@ -1606,44 +1620,192 @@ export function ClientProgressReportView({
                 Strategic Roadmap
               </h2>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            
+            <div className="space-y-8">
+              {/* Category Anchor */}
               <div className="space-y-4">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-[#68717A]">
-                  Your Original Why
+                <Label className="text-[10px] font-black uppercase tracking-widest text-[#68717A] ml-1">
+                  1. Clinical Health Anchor (80/20 & EIH Safeguards)
                 </Label>
-                <Textarea
-                  value={report.milestones.originalWhy}
-                  onChange={(e) =>
-                    setReport({
-                      ...report,
-                      milestones: {
-                        ...report.milestones,
-                        originalWhy: e.target.value,
-                      },
-                    })
-                  }
-                  className="min-h-[80px] rounded-3xl font-medium border-2 border-slate-100 focus:border-[#F06C22] transition-all p-4 print:border-none print:p-0 print:bg-transparent"
-                  placeholder="Emotional anchor..."
-                />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {[
+                    { id: 'weight_loss', label: 'Weight Loss Focus', description: 'Metabolic engine vs Kitchen habits' },
+                    { id: 'eih_management', label: 'EIH / Safety First', description: 'Pain-limited failure points' },
+                    { id: 'general_conditioning', label: 'Inroad / Mastery', description: 'The REAL objective vs numbers' }
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setReport({
+                        ...report,
+                        roadmap: { ...report.roadmap!, anchorCategory: cat.id as any }
+                      })}
+                      className={cn(
+                        "p-4 rounded-2xl border-2 text-left transition-all",
+                        report.roadmap?.anchorCategory === cat.id 
+                          ? "bg-[#0A2E46] border-[#0A2E46] text-white shadow-lg shadow-[#0A2E46]/20" 
+                          : "bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-200"
+                      )}
+                    >
+                      <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">{cat.label}</p>
+                      <p className="text-[8px] font-bold opacity-60 uppercase">{cat.description}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-4">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-[#68717A]">
-                  The 6-Month Plan
-                </Label>
-                <Textarea
-                  value={report.strategy.focusAreas}
-                  onChange={(e) =>
-                    setReport({
-                      ...report,
-                      strategy: {
-                        ...report.strategy,
-                        focusAreas: e.target.value,
-                      },
-                    })
-                  }
-                  className="min-h-[80px] rounded-3xl font-medium border-2 border-slate-100 focus:border-[#F06C22] transition-all p-4 print:border-none print:p-0 print:bg-transparent"
-                  placeholder="How will we anchor the results over the next half year?"
-                />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Motivation & Milestone */}
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-[#68717A] ml-1">
+                      2. The Emotional Anchor (Your "Why")
+                    </Label>
+                    <Textarea
+                      value={report.roadmap?.emotionalAnchor || ""}
+                      onChange={(e) => setReport({
+                        ...report,
+                        roadmap: { ...report.roadmap!, emotionalAnchor: e.target.value }
+                      })}
+                      className="min-h-[100px] rounded-3xl font-medium border-2 border-slate-100 focus:border-[#F06C22] p-4 placeholder:italic"
+                      placeholder="e.g., Playing with grandkids without knee pain..."
+                    />
+                  </div>
+                  <div className="space-y-4">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-[#68717A] ml-1">
+                      3. The Measurable Milestone (SMART)
+                    </Label>
+                    <Textarea
+                      value={report.roadmap?.smartGoal || ""}
+                      onChange={(e) => setReport({
+                        ...report,
+                        roadmap: { ...report.roadmap!, smartGoal: e.target.value }
+                      })}
+                      className="min-h-[100px] rounded-3xl font-medium border-2 border-slate-100 focus:border-[#F06C22] p-4"
+                      placeholder="e.g., Skiing trip ready by Christmas..."
+                    />
+                  </div>
+                </div>
+
+                {/* Prescription */}
+                <div className="bg-[#FAF9F6] p-6 rounded-[32px] border-2 border-slate-100 space-y-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-[#F06C22]/10 flex items-center justify-center">
+                      <Crosshair className="w-5 h-5 text-[#F06C22]" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black uppercase italic tracking-tighter text-[#0A2E46] leading-tight">Clinical Prescription</h3>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Step 3: Studio Implementation</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <button
+                        onClick={() => setReport({
+                          ...report,
+                          roadmap: { ...report.roadmap!, prescriptionType: 'quantitative' }
+                        })}
+                        className={cn(
+                          "py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all",
+                          report.roadmap?.prescriptionType === 'quantitative' 
+                            ? "bg-[#F06C22] text-white" 
+                            : "bg-slate-200 text-slate-500"
+                        )}
+                      >
+                        Quantitative (Number)
+                      </button>
+                      <button
+                        onClick={() => setReport({
+                          ...report,
+                          roadmap: { ...report.roadmap!, prescriptionType: 'qualitative' }
+                        })}
+                        className={cn(
+                          "py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all",
+                          report.roadmap?.prescriptionType === 'qualitative' 
+                            ? "bg-[#F06C22] text-white" 
+                            : "bg-slate-200 text-slate-500"
+                        )}
+                      >
+                        Qualitative (Skill)
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Target Machine</Label>
+                        <Select
+                          value={report.roadmap?.inStudioPrescription.targetMachine || ""}
+                          onValueChange={(v) => setReport({
+                            ...report,
+                            roadmap: {
+                              ...report.roadmap!,
+                              inStudioPrescription: { ...report.roadmap!.inStudioPrescription, targetMachine: v }
+                            }
+                          })}
+                        >
+                          <SelectTrigger className="bg-white border-slate-200 text-xs font-bold">
+                            <SelectValue placeholder="Select Machine" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white border-slate-200">
+                            {machines.map(m => (
+                              <SelectItem key={m.id} value={m.id!}>{m.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {report.roadmap?.prescriptionType === 'quantitative' ? (
+                        <div className="space-y-2">
+                          <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Target Weight/Metric</Label>
+                          <Input
+                            value={report.roadmap?.inStudioPrescription.targetMetric || ""}
+                            onChange={(e) => setReport({
+                              ...report,
+                              roadmap: {
+                                ...report.roadmap!,
+                                inStudioPrescription: { ...report.roadmap!.inStudioPrescription, targetMetric: e.target.value }
+                              }
+                            })}
+                            className="bg-white border-slate-200 text-xs font-bold"
+                            placeholder="e.g., 250 lbs for 90 seconds"
+                          />
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Specific Form Mastery Focus</Label>
+                          <Input
+                            value={report.roadmap?.inStudioPrescription.qualitativeFocus || ""}
+                            onChange={(e) => setReport({
+                              ...report,
+                              roadmap: {
+                                ...report.roadmap!,
+                                inStudioPrescription: { ...report.roadmap!.inStudioPrescription, qualitativeFocus: e.target.value }
+                              }
+                            })}
+                            className="bg-white border-slate-200 text-xs font-bold"
+                            placeholder="e.g., Zero momentum on turnarounds"
+                          />
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Timeframe</Label>
+                        <Input
+                          value={report.roadmap?.inStudioPrescription.timeframe || ""}
+                          onChange={(e) => setReport({
+                            ...report,
+                            roadmap: {
+                              ...report.roadmap!,
+                              inStudioPrescription: { ...report.roadmap!.inStudioPrescription, timeframe: e.target.value }
+                            }
+                          })}
+                          className="bg-white border-slate-200 text-xs font-bold"
+                          placeholder="e.g., Next 12 Weeks"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </section>

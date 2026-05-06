@@ -81,7 +81,7 @@ import {
 } from 'firebase/auth';
 
 import { db, auth } from './firebase';
-import { Trainer, TrainerAvailability, Client, View, Machine, WorkoutSession, ExerciseLog, Routine, ClientMachineSetting, SessionType, SessionNote, TrainerFocus } from './types';
+import { Trainer, TrainerAvailability, Client, View, Machine, WorkoutSession, ExerciseLog, Routine, ClientMachineSetting, SessionType, SessionNote, TrainerFocus, FocusRecord } from './types';
 import { OperationType, handleFirestoreError } from './lib/firestore-errors';
 // Removing duplicate cn import
 import { hashPin } from './lib/auth-utils';
@@ -194,6 +194,7 @@ export default function App() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [trainerFocuses, setTrainerFocuses] = useState<TrainerFocus[]>([]);
+  const [focusRecords, setFocusRecords] = useState<FocusRecord[]>([]);
   const [isAddingTrainer, setIsAddingTrainer] = useState(false);
   const [showNewClientsDialog, setShowNewClientsDialog] = useState(false);
   const [isReorderingTrainers, setIsReorderingTrainers] = useState(false);
@@ -876,6 +877,14 @@ export default function App() {
       handleFirestoreError(error, OperationType.GET, 'trainerFocuses');
     });
 
+    const unsubscribeFocusRecords = onSnapshot(collection(db, 'focusRecords'), (snapshot) => {
+      const focusData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FocusRecord));
+      setFocusRecords(focusData);
+    }, (error) => {
+      if (error.message?.toLowerCase().includes('quota')) { setHasQuotaError(true); return; }
+      handleFirestoreError(error, OperationType.GET, 'focusRecords');
+    });
+
     return () => {
       unsubscribeTrainers();
       unsubscribeClients();
@@ -883,6 +892,7 @@ export default function App() {
       unsubscribeSchedules();
       unsubscribeSessions();
       unsubscribeTrainerFocuses();
+      unsubscribeFocusRecords();
     };
   }, [isAuthReady, user]);
 
@@ -1052,9 +1062,9 @@ export default function App() {
     );
   }
 
-  return (
-    <ErrorBoundary>
-      <div className="flex flex-col min-h-screen bg-background text-foreground font-sans overflow-x-hidden w-full max-w-full">
+    return (
+      <ErrorBoundary>
+        <div className="flex flex-col min-h-screen bg-background text-foreground font-sans overflow-x-hidden w-full max-w-full">
         {/* Header */}
         {currentView !== 'workouts' && (
           <header className="sticky top-0 z-50 w-full border-b border-slate-700/80 bg-[#0A2E46] px-6 h-16 md:h-20 flex items-center justify-between">
@@ -1261,6 +1271,7 @@ export default function App() {
                 }}
                 authTrainer={authTrainer}
                 trainerFocuses={trainerFocuses}
+                focusRecords={focusRecords}
                 isSyncing={isSyncing}
                 setIsSyncing={setIsSyncing}
               />
@@ -4723,6 +4734,7 @@ function WorkoutTrackerView({
   onOpenInfo,
   authTrainer,
   trainerFocuses,
+  focusRecords,
   isSyncing,
   setIsSyncing,
   schedules
@@ -4742,6 +4754,7 @@ function WorkoutTrackerView({
   onOpenInfo: (m: Machine) => void,
   authTrainer: Trainer | null,
   trainerFocuses: TrainerFocus[],
+  focusRecords: FocusRecord[],
   isSyncing: boolean,
   setIsSyncing: (v: boolean) => void
 }) {
@@ -5587,6 +5600,7 @@ function WorkoutTrackerView({
         machines={machines}
         routines={routines}
         trainerFocuses={trainerFocuses.filter(f => f.clientId === clientId)}
+        focusRecords={focusRecords}
         sessionNotes={sessionNotes}
         logs={Object.values(logs).filter((l: any) => l.clientId === clientId) as any}
       />

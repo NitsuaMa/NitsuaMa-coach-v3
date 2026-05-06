@@ -24,6 +24,7 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CreateTrainerModal } from './CreateTrainerModal';
+import { PresentationDataSeeder } from './PresentationDataSeeder';
 import { Machine, Client, Trainer, WorkoutSession, ScheduleEntry } from '../types';
 import { findMatchingTrainer, normalizeName } from '../lib/sync-utils';
 
@@ -902,6 +903,7 @@ export function TrainerControlHubView({
 
               {/* Destructive Actions */}
               {isAdmin && (
+                <>
                 <Card className="border border-rose-900/50 bg-slate-800 shadow-2xl rounded-[32px] overflow-hidden">
                   <CardHeader className="bg-rose-950/20 pb-8 border-b border-rose-900/30">
                     <div className="flex items-center gap-4">
@@ -968,6 +970,10 @@ export function TrainerControlHubView({
                      </div>
                   </CardContent>
                 </Card>
+                
+                {/* Presentation Data Seeder */}
+                <PresentationDataSeeder machines={machines} />
+                </>
               )}
             </div>
           )}

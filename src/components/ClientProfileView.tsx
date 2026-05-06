@@ -68,6 +68,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ROUTINE_TEMPLATES, RoutineTemplateType } from "../constants";
+import { ClientFocusDashboard } from "./ClientFocusDashboard";
 import {
   Client,
   Machine,
@@ -80,6 +81,7 @@ import {
   Trainer,
   ScheduleEntry,
   ProgressReport,
+  FocusRecord,
 } from "../types";
 import { OperationType, handleFirestoreError } from "../lib/firestore-errors";
 import { WorkoutChartGrid } from "./WorkoutChartGrid";
@@ -1348,162 +1350,14 @@ export function ClientProfileView({
           </div>
         </TabsContent>
 
-        <TabsContent value="focus">
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="rounded-[40px] border-2 shadow-xl overflow-hidden">
-                <CardHeader className="p-8 border-b bg-muted/20">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <CardTitle className="text-xl font-black uppercase italic tracking-tighter">
-                        Trainer Focus Matrix
-                      </CardTitle>
-                      <CardDescription className="text-[10px] font-bold uppercase tracking-widest mt-1">
-                        Cross-trainer coaching directives
-                      </CardDescription>
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className="text-[9px] font-black bg-primary/10 text-primary border-primary/20"
-                    >
-                      4 P's Logic
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="divide-y">
-                    {trainerFocuses.length > 0 ? (
-                      trainerFocuses.map((focus) => (
-                        <div
-                          key={focus.id}
-                          className="p-8 flex flex-col sm:flex-row gap-6 hover:bg-muted/10 transition-colors"
-                        >
-                          <div className="shrink-0 space-y-2 w-full sm:w-32">
-                            <Badge
-                              className={`w-full h-8 flex items-center justify-center font-black uppercase tracking-tighter text-[10px] rounded-xl italic
-                            ${
-                              focus.category === "Path"
-                                ? "bg-indigo-500"
-                                : focus.category === "Pace"
-                                  ? "bg-emerald-500"
-                                  : focus.category === "Posture"
-                                    ? "bg-amber-500"
-                                    : "bg-rose-500"
-                            }`}
-                            >
-                              {focus.category}
-                            </Badge>
-                            <div className="text-center">
-                              <p className="text-[10px] font-black uppercase tracking-widest leading-none">
-                                {focus.trainerName}
-                              </p>
-                              <p className="text-[8px] font-bold text-muted-foreground uppercase mt-1 opacity-50">
-                                {focus.updatedAt?.toDate?.()
-                                  ? focus.updatedAt
-                                      .toDate()
-                                      .toLocaleDateString()
-                                  : "Recent"}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex-1 space-y-3">
-                            <div className="p-6 rounded-3xl bg-muted/20 border border-transparent hover:border-primary/20 transition-all">
-                              <p className="text-sm font-bold text-foreground leading-relaxed italic">
-                                "{focus.notes}"
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="p-20 text-center space-y-4 opacity-30">
-                        <Activity className="w-12 h-12 mx-auto" />
-                        <p className="text-xs font-black uppercase tracking-widest">
-                          No trainer focuses set for this client yet.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="space-y-6">
-              <Card className="rounded-[40px] border-2 shadow-xl bg-zinc-900 text-white">
-                <CardHeader className="p-8">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center">
-                      <Edit3 className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-black uppercase italic tracking-tighter leading-tight">
-                        Your Focus
-                      </h3>
-                      <p className="text-[9px] font-bold uppercase tracking-widest text-white/40">
-                        Define your coaching priority
-                      </p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="px-8 pb-8 space-y-6">
-                  <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-white/50 ml-1">
-                      Pillar Selection
-                    </Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {["Path", "Pace", "Posture", "Purpose"].map((p) => (
-                        <button
-                          key={p}
-                          onClick={() =>
-                            setFocusForm((f) => ({ ...f, category: p as any }))
-                          }
-                          className={`h-11 rounded-xl font-black uppercase italic text-[10px] transition-all border-2
-                            ${
-                              focusForm.category === p
-                                ? "bg-white text-zinc-900 border-white shadow-lg"
-                                : "bg-transparent border-white/10 text-white/40 hover:border-white/30"
-                            }`}
-                        >
-                          {p}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-white/50 ml-1">
-                      Directive Details
-                    </Label>
-                    <Textarea
-                      value={focusForm.notes}
-                      onChange={(e) =>
-                        setFocusForm((f) => ({ ...f, notes: e.target.value }))
-                      }
-                      placeholder="e.g., Focus on explosive turnaround on Leg Press while maintaining neutral spine..."
-                      className="min-h-[140px] rounded-2xl bg-white/5 border-transparent focus:bg-white/10 transition-all font-bold text-white placeholder:text-white/20 p-4"
-                    />
-                  </div>
-
-                  <Button
-                    disabled={isSavingFocus || !focusForm.notes}
-                    onClick={handleSaveFocus}
-                    className="w-full h-14 rounded-2xl bg-primary hover:bg-primary/90 font-black uppercase italic text-xs tracking-widest shadow-xl shadow-primary/20"
-                  >
-                    {isSavingFocus ? "Processing..." : "Set Focal Point"}
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <div className="p-6 rounded-[32px] bg-muted/50 border-2 border-dashed border-muted flex items-start gap-4">
-                <AlertCircle className="w-5 h-5 text-muted-foreground mt-1" />
-                <p className="text-[10px] font-bold text-muted-foreground leading-relaxed uppercase">
-                  Focuses are individual to each trainer. Other trainers will
-                  see your focus here and in the pre-session briefing when they
-                  start a session with this client.
-                </p>
-              </div>
-            </div>
-          </div>
+        <TabsContent value="focus" className="mt-0 flex-1 overflow-hidden min-h-0 bg-[#0A2E46] rounded-xl shadow-sm border border-slate-700">
+          {client && authTrainer && (
+            <ClientFocusDashboard 
+              client={client} 
+              trainer={authTrainer} 
+              machines={machines} 
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="history" className="h-[750px] relative">
