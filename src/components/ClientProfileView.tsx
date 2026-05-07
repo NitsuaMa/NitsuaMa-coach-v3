@@ -2064,11 +2064,39 @@ export function ClientProfileView({
                   }, {} as Record<string, typeof CLINICAL_FLAGS_MATRIX>);
                 
                   return (
-                    <div className="grid lg:grid-cols-2 gap-8">
-                      <div className="space-y-4">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                          Select Pertinent Health Flags
-                        </Label>
+                    <div className="space-y-6">
+                      {infoForm.clinicalFlags && infoForm.clinicalFlags.length > 0 && (
+                        <div className="w-full flex flex-col gap-2 mb-4 bg-slate-900/50 p-4 rounded-2xl border border-slate-700/50">
+                          <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                            Active Health Flags
+                          </Label>
+                          <div className="flex flex-wrap gap-2">
+                            {infoForm.clinicalFlags.map(flagId => {
+                               const flag = CLINICAL_FLAGS_MATRIX.find(f => f.id === flagId);
+                               if (!flag) return null;
+                               
+                               const bgColors = {
+                                 "Absolute Contraindication": "bg-rose-950/50 border-rose-600/50 text-rose-200",
+                                 "High Risk": "bg-amber-950/50 border-amber-500/50 text-amber-200",
+                                 "Moderate / Needs Modification": "bg-blue-950/50 border-blue-500/50 text-blue-200"
+                               };
+                               
+                               return (
+                                 <div key={flagId} className={`px-3 py-1.5 rounded-lg border flex items-center text-xs font-bold leading-none ${bgColors[flag.category as keyof typeof bgColors] || 'bg-slate-800 border-slate-600 text-slate-200'}`}>
+                                   <AlertCircle className="w-3 h-3 mr-1.5 opacity-70" />
+                                   {flag.conditionName}
+                                 </div>
+                               );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="grid lg:grid-cols-2 gap-8">
+                        <div className="space-y-4">
+                          <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                            Select Pertinent Health Flags
+                          </Label>
                         <Accordion type="multiple" className="w-full space-y-4">
                           {Object.entries(groupedFlags).map(([category, flags]) => (
                             <AccordionItem key={category} value={category} className="border-slate-700 bg-slate-900/50 rounded-xl px-4 py-1">
@@ -2135,6 +2163,7 @@ export function ClientProfileView({
                           />
                         </div>
                       </div>
+                    </div>
                     </div>
                   );
                 })()}
@@ -2497,6 +2526,14 @@ export function ClientProfileView({
                   </div>
 
                   <div className="grid grid-cols-1 gap-4">
+                    <Button
+                      onClick={() => setView("chart-importer" as any)}
+                      className="w-full bg-[#0ea5e9]/10 hover:bg-[#0ea5e9]/20 text-[#38BDF8] border border-[#38BDF8]/30 rounded-2xl font-black uppercase italic tracking-widest h-12 shadow-sm transition-all"
+                    >
+                      <Maximize className="w-4 h-4 mr-2" />
+                      Open Migration Hub
+                    </Button>
+                    
                     <Button
                       onClick={() => setView("workouts", { isIntroSession: true })}
                       className="w-full bg-[#115E8D] hover:bg-[#115E8D]/90 text-white rounded-2xl font-black uppercase italic tracking-widest h-12 shadow-md shadow-[#115E8D]/20"

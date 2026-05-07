@@ -19,7 +19,7 @@ import {
   Plus
 } from 'lucide-react';
 import { Client, Machine, Trainer, WorkoutSession, ExerciseLog } from '../types';
-import { processLegacyChart, extractMachineSettingsFromImage, OCRMachineSetting } from '../services/geminiService';
+import { processLegacyChart, extractMachineSettingsFromImage, OCRMachineSetting, ValidationSession, ValidationLog, sanitizeImportedSessions } from '../services/geminiService';
 import { db } from '../firebase';
 import { collection, writeBatch, doc, serverTimestamp, getDocs, query, where, increment } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
@@ -37,29 +37,7 @@ interface ImporterProps {
   onComplete?: () => void;
 }
 
-interface ValidationLog {
-  id: string;
-  name: string;
-  rawName?: string;
-  settings?: string;
-  weight: number;
-  reps: any;
-  isStaticHold: boolean;
-  timeUnderLoad?: number | null;
-  machineId?: string;
-  isAnomalous?: boolean;
-  anomalyReason?: string;
-}
 
-interface ValidationSession {
-  id: string;
-  sessionNumber: number;
-  date: string;
-  trainer: string;
-  trainerId?: string;
-  machines: ValidationLog[];
-  isInferredDate?: boolean;
-}
 
 const legacyMachineMap: Record<string, string> = {
   "cx": "4 Way Neck",
@@ -244,29 +222,8 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
       // 3. Convert to sorted array
       let mappedSessions = Object.values(sessionsMap).sort((a, b) => a.sessionNumber - b.sessionNumber);
 
-      // Apply Date Fallback chronologically
-      let lastValidDate = new Date();
-      mappedSessions.forEach((sess, idx) => {
-        if (!sess.isInferredDate) {
-           const ts = parseSessionDate(sess.date);
-           if (ts > 0) {
-             lastValidDate = new Date(ts);
-           } else {
-             sess.isInferredDate = true;
-           }
-        }
-        
-        if (sess.isInferredDate) {
-          if (idx > 0) {
-            // Previous Session Date + 4 Days
-            lastValidDate = new Date(lastValidDate.getTime() + 4 * 24 * 60 * 60 * 1000);
-          }
-          const mm = String(lastValidDate.getMonth() + 1).padStart(2, '0');
-          const dd = String(lastValidDate.getDate()).padStart(2, '0');
-          const yyyy = lastValidDate.getFullYear();
-          sess.date = `${yyyy}-${mm}-${dd}`;
-        }
-      });
+      // Apply Date Fallback and One Session Per Day Rules using Chronology Engine
+      mappedSessions = sanitizeImportedSessions(mappedSessions);
 
       setValidationSessions(mappedSessions);
       setScanProgress('OCR Pipeline Complete');
@@ -302,6 +259,7 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
       if (s.id !== sessionId) return s;
       return {
         ...s,
+        hasConflict: false, // Clear conflict warning upon edit
         machines: s.machines.map(l => {
           if (l.id !== logId) return l;
           return { ...l, [field]: value };
@@ -760,9 +718,9 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
                                     S#{session.sessionNumber}
                                   </Badge>
                                   <input 
-                                    className={cn("bg-transparent border-b border-transparent focus:border-[#F06C22] w-[80px] text-[10px] font-bold text-center outline-none transition-all", session.isInferredDate ? "text-amber-400" : "text-white")}
+                                    type="date"
+                                    className={cn("bg-slate-900 border focus:bg-slate-800 focus:border-[#F06C22] w-[90px] text-[10px] uppercase font-bold text-center outline-none transition-all rounded p-1", session.isInferredDate ? "border-amber-500/50 text-amber-400" : "border-slate-700 text-white")}
                                     value={session.date}
-                                    placeholder="MM/DD/YYYY"
                                     onChange={e => setValidationSessions(prev => prev.map(s => s.id === session.id ? { ...s, date: e.target.value, isInferredDate: false } : s))}
                                   />
                                   <input 
@@ -773,7 +731,12 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
                                   />
                                   {session.isInferredDate && (
                                     <div className="absolute -top-3 right-1/2 translate-x-1/2 whitespace-nowrap bg-amber-500 text-slate-950 font-black text-[7px] px-1 py-0.5 rounded uppercase flex items-center shadow-lg pointer-events-none">
-                                      <AlertTriangle size={8} className="mr-0.5" /> Inferred (+4)
+                                      <AlertTriangle size={8} className="mr-0.5" /> ⚠️ Date Inferred
+                                    </div>
+                                  )}
+                                  {session.hasConflict && (
+                                    <div className="absolute -top-8 right-1/2 translate-x-1/2 whitespace-nowrap bg-red-600 text-white font-black text-[7px] px-1 py-0.5 rounded uppercase flex items-center shadow-lg pointer-events-none z-50">
+                                      🚨 Merge Conflict: Check Machine Weights
                                     </div>
                                   )}
                                 </div>
@@ -802,7 +765,7 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
                                       <div className="flex flex-col items-center gap-1 group/cell">
                                         <div className="flex items-baseline justify-center gap-1">
                                           <input 
-                                            className="bg-transparent text-white font-black w-10 text-center border-b border-slate-700/50 focus:border-[#F06C22] focus:outline-none text-sm transition-all"
+                                            className="bg-transparent text-white font-black w-10 text-center border-b border-transparent focus:bg-slate-800 focus:border-[#F06C22] hover:border-slate-700/50 focus:outline-none text-sm transition-all rounded-t-sm"
                                             value={log.weight}
                                             onChange={e => updateLogData(session.id, log.id, 'weight', parseInt(e.target.value) || 0)}
                                             placeholder="LBS"
@@ -810,7 +773,7 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
                                           />
                                           <span className="text-slate-600 text-[8px] font-black">X</span>
                                           <input 
-                                            className={cn("bg-transparent font-black w-10 text-center border-b border-slate-700/50 focus:border-[#F06C22] focus:outline-none text-sm transition-all", log.isStaticHold ? "text-blue-400" : "text-white")}
+                                            className={cn("bg-transparent font-black w-10 text-center border-b border-transparent focus:bg-slate-800 focus:border-[#F06C22] hover:border-slate-700/50 focus:outline-none text-sm transition-all rounded-t-sm", log.isStaticHold ? "text-blue-400" : "text-white")}
                                             value={log.isStaticHold ? (log.timeUnderLoad ?? 0) : (log.reps ?? 0)}
                                             onChange={e => updateLogData(session.id, log.id, log.isStaticHold ? 'timeUnderLoad' : 'reps', parseInt(e.target.value) || 0)}
                                             placeholder={log.isStaticHold ? "SEC" : "REP"}
@@ -872,7 +835,7 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
                           ) : (
                             <>
                               <ArrowRight className="w-8 h-8" />
-                              Confirm & Commit Migration
+                              [ Confirm & Write to Client History ]
                             </>
                           )}
                         </Button>

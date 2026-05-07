@@ -1,4 +1,115 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI } from "@google/genai";
+import { parseSessionDate } from "../lib/utils";
+
+export interface ValidationLog {
+  id: string;
+  name: string;
+  rawName?: string;
+  settings?: string;
+  weight: number;
+  reps: any;
+  isStaticHold: boolean;
+  timeUnderLoad?: number | null;
+  machineId?: string;
+  isAnomalous?: boolean;
+  anomalyReason?: string;
+}
+
+export interface ValidationSession {
+  id: string;
+  sessionNumber: number;
+  date: string;
+  trainer: string;
+  trainerId?: string;
+  machines: ValidationLog[];
+  isInferredDate?: boolean;
+  hasConflict?: boolean;
+}
+
+export function sanitizeImportedSessions(sessions: ValidationSession[]): ValidationSession[] {
+  // Sort by sessionNumber chronologically initially
+  const sorted = [...sessions].sort((a, b) => a.sessionNumber - b.sessionNumber);
+
+  let lastValidDateTS = new Date().getTime();
+
+  for (let i = 0; i < sorted.length; i++) {
+    const sess = sorted[i];
+
+    // Check if missing or invalid date for Rule 2 / 3
+    let isInvalidDate = !sess.date || sess.date.toLowerCase() === 'confirm' || sess.date === '0' || sess.isInferredDate;
+    
+    let currentTS = 0;
+    if (!isInvalidDate) {
+      currentTS = parseSessionDate(sess.date);
+      if (currentTS <= 0) {
+        isInvalidDate = true;
+      }
+    }
+
+    if (isInvalidDate) {
+      // Rule 2: Dynamic Rest Imputation (+4 days)
+      if (i > 0) {
+        lastValidDateTS += 4 * 24 * 60 * 60 * 1000;
+        sess.isInferredDate = true;
+      } else {
+        // First session and mostly blank
+        sess.isInferredDate = true;
+      }
+      
+      const d = new Date(lastValidDateTS);
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      sess.date = `${yyyy}-${mm}-${dd}`;
+    } else {
+      // Rule 3: Trust the OCR
+      lastValidDateTS = currentTS;
+      sess.isInferredDate = false;
+      const d = new Date(lastValidDateTS);
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      sess.date = `${yyyy}-${mm}-${dd}`;
+    }
+  }
+
+  // 2. Rule 1: One Session Per Day Constraint
+  const mergedSessions: ValidationSession[] = [];
+  const dateMap: Record<string, ValidationSession> = {};
+
+  for (const sess of sorted) {
+    if (dateMap[sess.date]) {
+      const existing = dateMap[sess.date];
+      let conflict = false;
+
+      sess.machines.forEach(incomingMachine => {
+        const existingMachine = existing.machines.find(m => m.machineId === incomingMachine.machineId);
+        if (existingMachine) {
+          if (existingMachine.weight !== incomingMachine.weight || existingMachine.reps !== incomingMachine.reps) {
+            conflict = true;
+          }
+        } else {
+          existing.machines.push(incomingMachine);
+        }
+      });
+
+      if (conflict) {
+        existing.hasConflict = true;
+      }
+    } else {
+      dateMap[sess.date] = sess;
+      mergedSessions.push(sess);
+    }
+  }
+
+  // Re-number sessions after merge
+  mergedSessions.sort((a, b) => parseSessionDate(a.date) - parseSessionDate(b.date));
+  mergedSessions.forEach((sess, idx) => {
+    sess.sessionNumber = idx + 1;
+  });
+
+  return mergedSessions;
+}
 
 export const AI_SETUP_PROMPT = `You are an elite MaxStrength Fitness (MSF) clinical high-intensity strength coach. Your role is to guide floor trainers step-by-step through setting up clients safely and effectively on specific exercise machines.
 
@@ -20,29 +131,39 @@ export const AI_SCHEMA = {
     targetMuscles: {
       type: "array",
       items: { type: "string" },
-      description: "List of primary muscles targeted."
+      description: "List of primary muscles targeted.",
     },
     initialAdjustments: {
       type: "array",
       items: { type: "string" },
-      description: "Steps to take BEFORE the client enters (e.g., clear weight stack, set standard gap)."
+      description:
+        "Steps to take BEFORE the client enters (e.g., clear weight stack, set standard gap).",
     },
     entryAndSafety: {
       type: "array",
       items: { type: "string" },
-      description: "Step-by-step instructions for safely loading the client into the machine."
+      description:
+        "Step-by-step instructions for safely loading the client into the machine.",
     },
     alignmentAndPosture: {
       type: "array",
       items: { type: "string" },
-      description: "Instructions for seat height, joint stacking, and posture (e.g., 'chest up')."
+      description:
+        "Instructions for seat height, joint stacking, and posture (e.g., 'chest up').",
     },
     clientModifications: {
       type: "string",
-      description: "Specific adjustments made based on the provided Client Details. If none, output 'Standard MSF setup applies.'"
-    }
+      description:
+        "Specific adjustments made based on the provided Client Details. If none, output 'Standard MSF setup applies.'",
+    },
   },
-  required: ["targetMuscles", "initialAdjustments", "entryAndSafety", "alignmentAndPosture", "clientModifications"]
+  required: [
+    "targetMuscles",
+    "initialAdjustments",
+    "entryAndSafety",
+    "alignmentAndPosture",
+    "clientModifications",
+  ],
 };
 
 let genaiClient: GoogleGenAI | null = null;
@@ -65,33 +186,43 @@ export const AI_EXECUTION_SCHEMA = {
   properties: {
     gradualLoadUp: {
       type: "string",
-      description: "Instructions for how the client should initiate the first rep (e.g., 'apply 101 lbs of pressure to a 100 lb stack')."
+      description:
+        "Instructions for how the client should initiate the first rep (e.g., 'apply 101 lbs of pressure to a 100 lb stack').",
     },
     turnaroundRules: {
       type: "object",
       properties: {
         lowerTurn: {
           type: "string",
-          description: "Specific rules for the lower turnaround (e.g., 'touch and go smoothly', 'no pausing')."
+          description:
+            "Specific rules for the lower turnaround (e.g., 'touch and go smoothly', 'no pausing').",
         },
         upperTurn: {
           type: "string",
-          description: "Specific rules for the upper turnaround (e.g., 'pause for 1-2 seconds', 'squeeze for 2-3 seconds')."
-        }
+          description:
+            "Specific rules for the upper turnaround (e.g., 'pause for 1-2 seconds', 'squeeze for 2-3 seconds').",
+        },
       },
-      required: ["lowerTurn", "upperTurn"]
+      required: ["lowerTurn", "upperTurn"],
     },
     activeSetCues: {
       type: "array",
       items: { type: "string" },
-      description: "A list of 3 to 5 specific vocal cues or instructions the trainer should say during the set, extracted directly from the text."
+      description:
+        "A list of 3 to 5 specific vocal cues or instructions the trainer should say during the set, extracted directly from the text.",
     },
     failureAndExit: {
       type: "string",
-      description: "Instructions on how to handle the end of the set, achieving failure, and safely unloading the client."
-    }
+      description:
+        "Instructions on how to handle the end of the set, achieving failure, and safely unloading the client.",
+    },
   },
-  required: ["gradualLoadUp", "turnaroundRules", "activeSetCues", "failureAndExit"]
+  required: [
+    "gradualLoadUp",
+    "turnaroundRules",
+    "activeSetCues",
+    "failureAndExit",
+  ],
 };
 
 export const AI_CLINICAL_PROMPT = `You are an elite MaxStrength Fitness (MSF) Master Trainer and Clinical Strategist. Your role is to advise floor trainers on how to handle client limitations, injuries, special populations, and programming progressions for specific exercises.
@@ -112,34 +243,45 @@ export const AI_CLINICAL_SCHEMA = {
     contraindications: {
       type: "array",
       items: { type: "string" },
-      description: "Specific conditions or injuries where this exercise should be avoided or severely limited (e.g., 'Osteoporosis on Torso Rotation')."
+      description:
+        "Specific conditions or injuries where this exercise should be avoided or severely limited (e.g., 'Osteoporosis on Torso Rotation').",
     },
     dynamicModifications: {
       type: "string",
-      description: "Adjustments to the standard dynamic movement for specific limitations (e.g., 'Shorten ROM by pinning the weight stack', 'Use Torso Arm setup instead of Pulldown')."
+      description:
+        "Adjustments to the standard dynamic movement for specific limitations (e.g., 'Shorten ROM by pinning the weight stack', 'Use Torso Arm setup instead of Pulldown').",
     },
     staticAlternativeProtocol: {
       type: "object",
       properties: {
         isRecommended: { type: "boolean" },
-        setupAndExecution: { 
+        setupAndExecution: {
           type: "string",
-          description: "Step-by-step on how to set up the TSC or Static Hold (SH), including pin placement and time/effort protocol (e.g., 30/30/30 sec)."
-        }
+          description:
+            "Step-by-step on how to set up the TSC or Static Hold (SH), including pin placement and time/effort protocol (e.g., 30/30/30 sec).",
+        },
       },
-      required: ["isRecommended", "setupAndExecution"]
+      required: ["isRecommended", "setupAndExecution"],
     },
     approvedSubstitutions: {
       type: "array",
       items: { type: "string" },
-      description: "Alternative exercises to perform if this machine cannot be used, based strictly on the reference text."
+      description:
+        "Alternative exercises to perform if this machine cannot be used, based strictly on the reference text.",
     },
     progressionAdvice: {
       type: "string",
-      description: "Specific rules for progressing this client on this machine (e.g., 'Do not progress load until 6-sec/6-sec cadence is mastered')."
-    }
+      description:
+        "Specific rules for progressing this client on this machine (e.g., 'Do not progress load until 6-sec/6-sec cadence is mastered').",
+    },
   },
-  required: ["contraindications", "dynamicModifications", "staticAlternativeProtocol", "approvedSubstitutions", "progressionAdvice"]
+  required: [
+    "contraindications",
+    "dynamicModifications",
+    "staticAlternativeProtocol",
+    "approvedSubstitutions",
+    "progressionAdvice",
+  ],
 };
 
 function getGenaiClient(): GoogleGenAI {
@@ -161,11 +303,11 @@ export interface SetupWizardResult {
 }
 
 export async function generateMachineSetupGuide(
-  machineName: string, 
-  clientDetails: string, 
+  machineName: string,
+  clientDetails: string,
   referenceText: string,
-  clientAilments: string = '',
-  machineContraindications: string = ''
+  clientAilments: string = "",
+  machineContraindications: string = "",
 ): Promise<SetupWizardResult> {
   const ai = getGenaiClient();
   const prompt = `TARGET MACHINE: ${machineName}
@@ -182,13 +324,13 @@ TASK:
 Analyze the MSF Reference Text. Generate a step-by-step setup guide for the trainer to get the client safely into the ${machineName}. Ensure any specific limitations mentioned in the Client Details and Clinical Profile are addressed using rules found in the Reference Text. Specifically check against the Machine Known Contraindications. Return ONLY the requested JSON object.`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3.1-pro-preview',
+    model: "gemini-3.1-pro-preview",
     contents: prompt,
     config: {
       systemInstruction: AI_SETUP_PROMPT,
       responseMimeType: "application/json",
-      responseSchema: AI_SCHEMA
-    }
+      responseSchema: AI_SCHEMA,
+    },
   });
 
   if (!response.text) {
@@ -215,7 +357,7 @@ export interface ExecutionGuideResult {
 
 export async function generateExecutionGuide(
   machineName: string,
-  referenceText: string
+  referenceText: string,
 ): Promise<ExecutionGuideResult> {
   const ai = getGenaiClient();
   const prompt = `TARGET MACHINE: ${machineName}
@@ -229,13 +371,13 @@ TASK:
 Analyze the provided MSF Reference Text for the ${machineName}. Generate a structured coaching guide that a trainer can read while the client is actively performing the exercise. Focus strictly on the execution of the movement, the pacing, turnaround rules, and specific verbal cues. Return ONLY the requested JSON object.`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3.1-pro-preview',
+    model: "gemini-3.1-pro-preview",
     contents: prompt,
     config: {
       systemInstruction: AI_EXECUTION_PROMPT,
       responseMimeType: "application/json",
-      responseSchema: AI_EXECUTION_SCHEMA
-    }
+      responseSchema: AI_EXECUTION_SCHEMA,
+    },
   });
 
   if (!response.text) {
@@ -265,8 +407,8 @@ export async function generateClinicalStrategy(
   machineName: string,
   clientDetails: string,
   referenceText: string,
-  clientAilments: string = '',
-  machineContraindications: string = ''
+  clientAilments: string = "",
+  machineContraindications: string = "",
 ): Promise<ClinicalStrategyResult> {
   const ai = getGenaiClient();
   const prompt = `TARGET MACHINE: ${machineName}
@@ -283,13 +425,13 @@ TASK:
 Analyze the MSF Reference Text, the specific Client Details, and explicitly cross-reference the Client Clinical Profile against the Machine Known Contraindications. Generate a clinical strategy and progression guide for the trainer. If the client's condition requires a Static Hold (SH) or Timed Static Contraction (TSC), detail the exact setup. If the exercise is completely contraindicated, provide the approved substitutions. Return ONLY the requested JSON object.`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3.1-pro-preview',
+    model: "gemini-3.1-pro-preview",
     contents: prompt,
     config: {
       systemInstruction: AI_CLINICAL_PROMPT,
       responseMimeType: "application/json",
-      responseSchema: AI_CLINICAL_SCHEMA
-    }
+      responseSchema: AI_CLINICAL_SCHEMA,
+    },
   });
 
   if (!response.text) {
@@ -341,21 +483,22 @@ export const MACHINE_SETTINGS_OCR_SCHEMA = {
       items: {
         type: "object" as const,
         properties: {
-          machineId: { 
+          machineId: {
             type: "string" as const,
-            description: "The official machine ID from the provided dictionary."
+            description:
+              "The official machine ID from the provided dictionary.",
           },
           seat: { type: "string" as const },
           gap: { type: "string" as const },
           backPad: { type: "string" as const },
           handles: { type: "string" as const },
-          armPad: { type: "string" as const }
+          armPad: { type: "string" as const },
         },
-        required: ["machineId"]
-      }
-    }
+        required: ["machineId"],
+      },
+    },
   },
-  required: ["settings"]
+  required: ["settings"],
 };
 
 export const CHART_OCR_SCHEMA = {
@@ -368,10 +511,10 @@ export const CHART_OCR_SCHEMA = {
         properties: {
           sessionNumber: { type: "number" as const },
           date: { type: "string" as const },
-          trainer: { type: "string" as const }
+          trainer: { type: "string" as const },
         },
-        required: ["sessionNumber", "date", "trainer"]
-      }
+        required: ["sessionNumber", "date", "trainer"],
+      },
     },
     performances: {
       type: "array" as const,
@@ -383,41 +526,47 @@ export const CHART_OCR_SCHEMA = {
           settings: { type: "string" as const },
           weight: { type: "number" as const },
           reps: { type: "string" as const },
-          isStaticHold: { type: "boolean" as const }
+          isStaticHold: { type: "boolean" as const },
         },
-        required: ["sessionNumber", "machineName", "settings", "weight", "reps"]
-      }
-    }
+        required: [
+          "sessionNumber",
+          "machineName",
+          "settings",
+          "weight",
+          "reps",
+        ],
+      },
+    },
   },
-  required: ["sessionHeaders", "performances"]
+  required: ["sessionHeaders", "performances"],
 };
 
 export async function extractMachineSettingsFromImage(
-  images: { base64: string; mimeType: string }[]
+  images: { base64: string; mimeType: string }[],
 ): Promise<OCRMachineSetting[]> {
   const ai = getGenaiClient();
-  
+
   const machineDictionary = {
-    "LP": "leg_press",
-    "LE": "leg_extension",
-    "LC": "leg_curl",
-    "ABD": "abduction",
-    "ADD": "adduction",
-    "CP": "chest_press",
-    "OP": "overhead_press",
-    "SD": "seated_dip",
-    "CF": "chest_flye",
-    "TE": "triceps_extension",
-    "LR": "lateral_raise",
-    "CR": "compound_row",
-    "PD": "pulldown",
-    "PO": "pullover",
-    "SR": "simple_row",
-    "BC": "biceps_curl",
+    LP: "leg_press",
+    LE: "leg_extension",
+    LC: "leg_curl",
+    ABD: "abduction",
+    ADD: "adduction",
+    CP: "chest_press",
+    OP: "overhead_press",
+    SD: "seated_dip",
+    CF: "chest_flye",
+    TE: "triceps_extension",
+    LR: "lateral_raise",
+    CR: "compound_row",
+    PD: "pulldown",
+    PO: "pullover",
+    SR: "simple_row",
+    BC: "biceps_curl",
     "LE/L": "lumbar_extension",
-    "AB": "abdominals",
-    "TR": "torso_rotation",
-    "CE": "cervical_extension"
+    AB: "abdominals",
+    TR: "torso_rotation",
+    CE: "cervical_extension",
   };
 
   const systemInstruction = `You are an expert at decoding messy, handwritten clinical workout charts. Your specific task is to extract historical MACHINE SETTINGS from Column 2 of the provided chart.
@@ -442,25 +591,27 @@ ${JSON.stringify(machineDictionary, null, 2)}
 - If a field is not found, omit it from the object.
 - Return ONLY valid JSON matching the requested schema.`;
 
-  const imageParts = images.map(img => ({
-    inlineData: { data: img.base64, mimeType: img.mimeType }
+  const imageParts = images.map((img) => ({
+    inlineData: { data: img.base64, mimeType: img.mimeType },
   }));
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: "gemini-3-flash-preview",
     contents: [
       {
         parts: [
           ...imageParts,
-          { text: `Analyze the charts and extract all machine settings found in the second column.` }
-        ]
-      }
+          {
+            text: `Analyze the charts and extract all machine settings found in the second column.`,
+          },
+        ],
+      },
     ],
     config: {
       systemInstruction,
       responseMimeType: "application/json",
-      responseSchema: MACHINE_SETTINGS_OCR_SCHEMA
-    }
+      responseSchema: MACHINE_SETTINGS_OCR_SCHEMA,
+    },
   });
 
   if (!response.text) {
@@ -478,10 +629,10 @@ ${JSON.stringify(machineDictionary, null, 2)}
 
 export async function processLegacyChart(
   images: { base64: string; mimeType: string }[],
-  expectedSessions: number
+  expectedSessions: number,
 ): Promise<OCRResult> {
   const ai = getGenaiClient();
-  
+
   const systemInstruction = `You are a high-precision clinical data extraction AI. You are receiving an array of images representing a continuous physical training chart for a single client.
 
 The chart has two distinct parts: The Header Row and the Data Grid.
@@ -507,25 +658,27 @@ Expected Sessions: ${expectedSessions}.
 
 Return ONLY valid JSON matching the requested schema.`;
 
-  const imageParts = images.map(img => ({
-    inlineData: { data: img.base64, mimeType: img.mimeType }
+  const imageParts = images.map((img) => ({
+    inlineData: { data: img.base64, mimeType: img.mimeType },
   }));
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: "gemini-3-flash-preview",
     contents: [
       {
         parts: [
           ...imageParts,
-          { text: `Analyze these training chart images and extract data for exactly ${expectedSessions} sessions into a consolidated row-by-row structure.` }
-        ]
-      }
+          {
+            text: `Analyze these training chart images and extract data for exactly ${expectedSessions} sessions into a consolidated row-by-row structure.`,
+          },
+        ],
+      },
     ],
     config: {
       systemInstruction,
       responseMimeType: "application/json",
-      responseSchema: CHART_OCR_SCHEMA
-    }
+      responseSchema: CHART_OCR_SCHEMA,
+    },
   });
 
   if (!response.text) {

@@ -4126,7 +4126,6 @@ function MachineSettingsDialog({
 function PerformanceEntryDialog({
   machine,
   currentWeight,
-  currentNextWeight,
   currentReps,
   currentQuality,
   pastMachineLogs,
@@ -4140,7 +4139,6 @@ function PerformanceEntryDialog({
 }: {
   machine: Machine;
   currentWeight: string;
-  currentNextWeight: string;
   currentReps: string;
   currentQuality: number;
   pastMachineLogs: { log: ExerciseLog; session: WorkoutSession }[];
@@ -4148,7 +4146,7 @@ function PerformanceEntryDialog({
   side?: 'Left' | 'Right';
   isTorsoFull?: boolean;
   currentRepsRight?: string;
-  onSave: (weight: string, target: string, repsOrSeconds: string, quality: number, isHold: boolean, side?: 'Left' | 'Right', repsRight?: string) => void;
+  onSave: (weight: string, repsOrSeconds: string, quality: number, isHold: boolean, side?: 'Left' | 'Right', repsRight?: string) => void;
   onClose: () => void;
   machineSettings?: ClientMachineSetting;
 }) {
@@ -4411,7 +4409,7 @@ function PerformanceEntryDialog({
           <Button variant="outline" className="h-12 rounded-xl font-black uppercase text-[11px] tracking-widest border border-slate-600 bg-slate-700/50 text-slate-300 hover:bg-slate-700 hover:text-white transition-all shadow-md" onClick={onClose}>
             Cancel
           </Button>
-          <Button className="h-12 rounded-xl font-black uppercase text-[11px] tracking-widest bg-[#F06C22] text-white hover:bg-[#ea580c] shadow-[0_4px_15px_rgba(240,108,34,0.4)] border-none active:scale-95 transition-all" onClick={() => onSave(current.toString(), currentNextWeight || current.toString(), reps.toString(), quality, isHold, side, repsRt.toString())}>
+          <Button className="h-12 rounded-xl font-black uppercase text-[11px] tracking-widest bg-[#F06C22] text-white hover:bg-[#ea580c] shadow-[0_4px_15px_rgba(240,108,34,0.4)] border-none active:scale-95 transition-all" onClick={() => onSave(current.toString(), reps.toString(), quality, isHold, side, repsRt.toString())}>
             Save Set
           </Button>
         </div>
@@ -5176,13 +5174,16 @@ function WorkoutTrackerView({
             try {
               const logsQ = query(
                 collection(db, 'exerciseLogs'),
-                where('clientId', '==', clientId),
-                orderBy('createdAt', 'desc'),
-                limit(30)
+                where('clientId', '==', clientId)
               );
               
               const snap = await getDocs(logsQ);
               const allRecentLogs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExerciseLog));
+              allRecentLogs.sort((a, b) => {
+                const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+                const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+                return timeB - timeA;
+              });
               
               const historical: Record<string, { last: ExerciseLog; previous: ExerciseLog | null }> = {};
               
@@ -5329,16 +5330,27 @@ function WorkoutTrackerView({
       // 2. Fetch last logs to pre-fill weights
       const lastLogsQuery = query(
         collection(db, 'exerciseLogs'),
-        where('clientId', '==', clientId),
-        orderBy('createdAt', 'desc'),
-        limit(100)
+        where('clientId', '==', clientId)
       );
       const lastLogsSnap = await getDocs(lastLogsQuery);
+      
+      const allLogs = lastLogsSnap.docs.map(l => l.data() as ExerciseLog);
+      allLogs.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+        const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+        return timeB - timeA;
+      });
+      
       const machineLastWeights: Record<string, string> = {};
-      lastLogsSnap.forEach(l => {
-        const data = l.data() as ExerciseLog;
-        if (!machineLastWeights[data.machineId]) {
-          machineLastWeights[data.machineId] = data.targetWeight || data.weight || '0';
+      const machineLastQualities: Record<string, number> = {};
+      allLogs.forEach(data => {
+        const key = data.side ? `${data.machineId}_${data.side}` : data.machineId;
+        const validWeight = data.weight;
+        if (!machineLastWeights[key] && validWeight) {
+          machineLastWeights[key] = validWeight;
+          if (data.repQuality) {
+            machineLastQualities[key] = data.repQuality;
+          }
         }
       });
 
@@ -5354,36 +5366,46 @@ function WorkoutTrackerView({
         for (const mId of activeMachineIds) {
           const mac = machines.find(m => m.id === mId);
           const isTorsoMac = mac?.name.toLowerCase().includes('torso rotation');
-          const prefilledWeight = machineLastWeights[mId];
           
-          if (prefilledWeight) {
-            if (isTorsoMac) {
-              // Create Left set
+          if (isTorsoMac) {
+            const prefilledLeft = machineLastWeights[`${mId}_Left`] || machineLastWeights[mId];
+            const prefilledRight = machineLastWeights[`${mId}_Right`] || machineLastWeights[mId];
+            
+            // Create Left set if there is history
+            if (prefilledLeft) {
               await addDoc(collection(db, 'exerciseLogs'), {
                 sessionId: docRef.id,
                 clientId,
                 machineId: mId,
                 side: 'Left',
-                weight: prefilledWeight,
+                weight: prefilledLeft,
+                repQuality: machineLastQualities[`${mId}_Left`] || machineLastQualities[mId] || null,
                 machineSettings: currentSettings[mId]?.settings || {},
                 createdAt: serverTimestamp()
               });
-              // Create Right set
+            }
+            // Create Right set if there is history
+            if (prefilledRight) {
               await addDoc(collection(db, 'exerciseLogs'), {
                 sessionId: docRef.id,
                 clientId,
                 machineId: mId,
                 side: 'Right',
-                weight: prefilledWeight,
+                weight: prefilledRight,
+                repQuality: machineLastQualities[`${mId}_Right`] || machineLastQualities[mId] || null,
                 machineSettings: currentSettings[mId]?.settings || {},
                 createdAt: serverTimestamp()
               });
-            } else {
+            }
+          } else {
+            const prefilledWeight = machineLastWeights[mId];
+            if (prefilledWeight) {
               await addDoc(collection(db, 'exerciseLogs'), {
                 sessionId: docRef.id,
                 clientId,
                 machineId: mId,
                 weight: prefilledWeight,
+                repQuality: machineLastQualities[mId] || null,
                 machineSettings: currentSettings[mId]?.settings || {},
                 createdAt: serverTimestamp()
               });
@@ -5934,7 +5956,6 @@ function WorkoutTrackerView({
         const logR = isTorso ? logs[keyR] : undefined;
 
         const currentWeight = (isTorso ? (logL?.weight || logR?.weight || '0') : (logL?.weight || '0'));
-        const currentNextWeight = logL?.targetWeight || '';
         const currentRepsLeft = logL?.isStaticHold ? (logL.seconds || '0') : (logL?.reps || '0');
         const currentRepsRightStr = logR?.isStaticHold ? (logR.seconds || '0') : (logR?.reps || '0');
 
@@ -5945,7 +5966,6 @@ function WorkoutTrackerView({
             isTorsoFull={isTorso}
             machineSettings={clientMachineSettings[editingWeightMachineId]}
             currentWeight={currentWeight}
-            currentNextWeight={currentNextWeight}
             currentReps={currentRepsLeft}
             currentRepsRight={isTorso ? currentRepsRightStr : undefined}
             currentQuality={logL?.repQuality || 0}
@@ -5962,13 +5982,12 @@ function WorkoutTrackerView({
               setEditingWeightMachineId(null);
               setEditingWeightSide(undefined);
             }}
-            onSave={async (weight, target, repsOrSeconds, quality, isHold, side, repsRightStr) => {
+            onSave={async (weight, repsOrSeconds, quality, isHold, side, repsRightStr) => {
               const timeDiff = Math.floor((Date.now() - lastMachineLoggedAt.current) / 1000);
 
               if (isTorso) {
                 // Save Left Side
                 await updateLog(currentSession.id!, editingWeightMachineId, 'weight', weight, 'Left');
-                await updateLog(currentSession.id!, editingWeightMachineId, 'targetWeight', target, 'Left');
                 await updateLog(currentSession.id!, editingWeightMachineId, 'repQuality', quality, 'Left');
                 await updateLog(currentSession.id!, editingWeightMachineId, 'isStaticHold', isHold, 'Left');
                 if (isHold) {
@@ -5981,7 +6000,6 @@ function WorkoutTrackerView({
                 
                 // Save Right Side (using the same weight and quality, but its own reps)
                 await updateLog(currentSession.id!, editingWeightMachineId, 'weight', weight, 'Right');
-                await updateLog(currentSession.id!, editingWeightMachineId, 'targetWeight', target, 'Right');
                 await updateLog(currentSession.id!, editingWeightMachineId, 'repQuality', quality, 'Right');
                 await updateLog(currentSession.id!, editingWeightMachineId, 'isStaticHold', isHold, 'Right');
                 if (isHold) {
@@ -5994,7 +6012,6 @@ function WorkoutTrackerView({
                 
               } else {
                 await updateLog(currentSession.id!, editingWeightMachineId, 'weight', weight, side);
-                await updateLog(currentSession.id!, editingWeightMachineId, 'targetWeight', target, side);
                 await updateLog(currentSession.id!, editingWeightMachineId, 'repQuality', quality, side);
                 await updateLog(currentSession.id!, editingWeightMachineId, 'isStaticHold', isHold, side);
                 if (isHold) {
@@ -6395,6 +6412,16 @@ function WorkoutTrackerView({
                                        prevLog.isStaticHold ? `${prevLog.seconds}s` : `${prevLog.reps}R`
                                      )}
                                     </span>
+                                    {prevLog.repQuality !== undefined && prevLog.repQuality !== null && (
+                                       <span className={
+                                          `font-black text-[7px] mt-[2px] px-1 rounded-sm ` + 
+                                          (prevLog.repQuality === 1 ? 'bg-red-500/10 text-red-600' :
+                                           prevLog.repQuality === 2 ? 'bg-amber-500/10 text-amber-600' :
+                                           'bg-emerald-500/10 text-emerald-600')
+                                       }>
+                                         Q{prevLog.repQuality}
+                                       </span>
+                                    )}
                                  </div>
                               ) : (
                                  <span className="text-[9px] text-slate-300 font-medium">--</span>
