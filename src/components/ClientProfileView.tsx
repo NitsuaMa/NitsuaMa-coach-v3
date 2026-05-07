@@ -1468,40 +1468,6 @@ export function ClientProfileView({
                 allLogs={allLogs}
               />
             )}
-
-            <Card className="rounded-[40px] shadow-xl bg-[#0A2E46] border-[#115E8D]/30 text-white overflow-hidden max-w-2xl mx-auto">
-              <CardHeader className="p-6 border-b border-white/5">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center">
-                    <Maximize className="w-5 h-5 text-[#38BDF8]" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg font-black uppercase italic tracking-tighter leading-tight">
-                      Data & Migration Tools
-                    </CardTitle>
-                    <CardDescription className="text-[9px] font-bold uppercase tracking-widest text-white/40">
-                      OCR & FileMaker Settings Import
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="flex flex-col md:flex-row gap-6 items-center">
-                  <div className="flex-1">
-                    <p className="text-[10px] text-white/60 font-medium leading-relaxed">
-                      Missing historical data? Use our OCR pipeline to import settings and session logs from legacy FileMaker charts or handwritten files.
-                    </p>
-                  </div>
-                  <Button
-                    onClick={() => setView("chart-importer" as any)}
-                    className="w-full md:w-auto px-8 h-12 rounded-2xl bg-[#38BDF8] hover:bg-[#0ea5e9] text-white font-black uppercase italic tracking-widest text-[10px] transition-all shrink-0 shadow-lg shadow-[#38BDF8]/20"
-                  >
-                    <Maximize className="w-4 h-4 mr-2" />
-                    Open Migration Hub
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </TabsContent>
 

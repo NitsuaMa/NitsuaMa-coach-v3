@@ -78,6 +78,66 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
       "Consider doing ABD prior to LP to pre-fatigue glutes and improve sensation of glute engagement."
     ]
   },
+  "leg_curl": {
+    id: "leg_curl",
+    name: "Leg Curl",
+    kinematicClassification: "Simple Pull",
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    requiresHandoff: false,
+    setupGap: "Gap 2",
+    sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."],
+    category: "Lower Body",
+    baseMale: 70,
+    baseFemale: 40,
+    setup: "Knee aligned with axis. Thigh pad secure above knee. Ankle pad on Achilles.",
+    execution: "Dorsiflex ankles slightly. Squeeze at flexion. Smooth eccentric return.",
+    target: "Hamstrings",
+    targetMuscles: [
+      "Hamstrings - Knee Flexion",
+      "Gastrocnemius (Calf) - Knee Flexion"
+    ],
+    synergists: [
+      "Sartorius (upper leg in front of thigh) - assists in Knee Flexion",
+      "Gracilis (inner thigh) - assists in Knee Flexion",
+      "Wrist Flexors (Forearms) - gripping/holding - anchoring into seat with arms"
+    ],
+    setupCues: [
+      "LC will most likely have a gap of 2 or 3 as an introduction to this exercise (this will be determined by the Studio Leader and MSF Corp). A gap of 3 or more may be advised for those with knee injuries/issues.",
+      "Move the seat back to the rearmost position leaving the largest possible area on the seat.",
+      "Have the subject sit with their femurs cantilevered off the front of the seat and the lower leg hanging.",
+      "The knee should align with the axis of rotation of the machine, which puts the knee cap at the edge of the roller pad but NOT under the pad. No part of the patella can be under the roller pad.",
+      "Subject leans slightly forward, seat back is brought forward to just contact the lower back without pushing knees ahead of axis.",
+      "Verify that the knees are still in alignment with the axis of rotation.",
+      "Subject exits the machine to allow for weight selection and proper loading.",
+      "Use the assist bar attached to the movement arm, pull the movement arm down to an approximate midpoint. Use your right knee on the calf pad to assist.",
+      "Lower the weight to set the movement arm into the starting position (client’s legs will now be extended out in front of them).",
+      "ALTERNATIVE LOADING METHOD: If weight is too heavy to move with assist bar, use only accessory stack initially. Lower movement arm against passive tension, then select main stack.",
+      "Adjust the calf pad. Ideally, it will make contact with the lowest part of the back of the leg, just above the achilles tendon. A tighter fit that is still comfortable is ideal."
+    ],
+    executionCues: [
+      "LOAD UP: From starting position, keeping neutral head, feet and ankles relaxed, pulling up on handles, gradually activate force couple by bending knees into roller pads.",
+      "Once instructor gives cue to begin load up, observe intently. Give positive feedback if proper.",
+      "CONCENTRIC: Move until knees are maximally bent, with the 'click' after the brief pause or squeeze.",
+      "ECCENTRIC: After load up and first concentric, cue 'ease out and do not speed up'.",
+      "LOWER TURNAROUND: Establish expectation: 'touch and go' or 'be continuous' or 'barely touch, barely start'.",
+      "Keep hips down by anchoring with the hands.",
+      "After lower turnaround at beginning of third rep, dorsiflex ankles AFTER the change of direction.",
+      "Cue: 'keep ankles relaxed during the turn…now pull the feet up to the knees'.",
+      "At upper turn cue: 'keep ankles flexed, keep movement arm still, keep breathing, [click], relax the ankles, THEN ease out'. Ensure no movement occurs while relaxing ankles.",
+      "Pace: 1-second pause on first two reps, 2-3 second 'squeeze' from third rep on.",
+      "Maintain posture, head position, pace, and contact on roller pads. Movement only at knee joint.",
+      "Record only full reps. Continuing set after concentric failure is highly individual and should be discussed with a leader."
+    ],
+    clinicalWarnings: [
+      "Gradual load up may take 3 to 5 seconds. Use imagery like 'just barely beginning to dent the roller pads'.",
+      "Relax feet/ankles on first two reps, then flex ankles during concentric from third rep on. This 'toggling' engages calf on concentric for tighter contraction, then relaxes on eccentric to isolate hamstring.",
+      "Leg curl has reputation for 'cramps'. These are often just sensations from unfamiliar knee flexion resistance and typically go away as strength increases.",
+      "If client physically cannot fully bend knees, redefine full ROM as 'limited ROM' or 'limit flexion' on chart.",
+      "Consider using a hard end stop at THEIR contracted position (upper turn) with extra selector pin. Document gap.",
+      "Full knee flexion is not a requirement. Focus on establishing neuromuscular connection.",
+      "Prolonged light sets may be counterproductive due to discomfort. Strive for 'faster' reps (6s/6s) and heavier weight leading to failure in ≤10 reps once form is perfect."
+    ]
+  },
   "leg_extension": {
     id: "leg_extension",
     name: "Leg Extension",
@@ -137,66 +197,6 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
       "Most conservative option: Timed Static Contraction (TSC) – position movement arm mid-range, pin heavy unliftable weight, cue 50% for 30s, 75% for 30s, 100% for 30s.",
       "Alternative conservative option: Static Hold (SH) – load held against end stop. Initial duration: 30–45s; progress to 120s max before increasing weight.",
       "Be cautious with prolonged light sets that may lead to discomfort before stimulus. Strive for heavier weight over time and controlled 6/6 tempo leading to failure in ≤10 reps."
-    ]
-  },
-  "leg_curl": {
-    id: "leg_curl",
-    name: "Leg Curl",
-    kinematicClassification: "Simple Pull",
-    executionPosture: "Chest Up / Anterior Pelvic Tilt",
-    requiresHandoff: false,
-    setupGap: "Gap 2",
-    sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."],
-    category: "Lower Body",
-    baseMale: 70,
-    baseFemale: 40,
-    setup: "Knee aligned with axis. Thigh pad secure above knee. Ankle pad on Achilles.",
-    execution: "Dorsiflex ankles slightly. Squeeze at flexion. Smooth eccentric return.",
-    target: "Hamstrings",
-    targetMuscles: [
-      "Hamstrings - Knee Flexion",
-      "Gastrocnemius (Calf) - Knee Flexion"
-    ],
-    synergists: [
-      "Sartorius (upper leg in front of thigh) - assists in Knee Flexion",
-      "Gracilis (inner thigh) - assists in Knee Flexion",
-      "Wrist Flexors (Forearms) - gripping/holding - anchoring into seat with arms"
-    ],
-    setupCues: [
-      "LC will most likely have a gap of 2 or 3 as an introduction to this exercise (this will be determined by the Studio Leader and MSF Corp). A gap of 3 or more may be advised for those with knee injuries/issues.",
-      "Move the seat back to the rearmost position leaving the largest possible area on the seat.",
-      "Have the subject sit with their femurs cantilevered off the front of the seat and the lower leg hanging.",
-      "The knee should align with the axis of rotation of the machine, which puts the knee cap at the edge of the roller pad but NOT under the pad. No part of the patella can be under the roller pad.",
-      "Subject leans slightly forward, seat back is brought forward to just contact the lower back without pushing knees ahead of axis.",
-      "Verify that the knees are still in alignment with the axis of rotation.",
-      "Subject exits the machine to allow for weight selection and proper loading.",
-      "Use the assist bar attached to the movement arm, pull the movement arm down to an approximate midpoint. Use your right knee on the calf pad to assist.",
-      "Lower the weight to set the movement arm into the starting position (client’s legs will now be extended out in front of them).",
-      "ALTERNATIVE LOADING METHOD: If weight is too heavy to move with assist bar, use only accessory stack initially. Lower movement arm against passive tension, then select main stack.",
-      "Adjust the calf pad. Ideally, it will make contact with the lowest part of the back of the leg, just above the achilles tendon. A tighter fit that is still comfortable is ideal."
-    ],
-    executionCues: [
-      "LOAD UP: From starting position, keeping neutral head, feet and ankles relaxed, pulling up on handles, gradually activate force couple by bending knees into roller pads.",
-      "Once instructor gives cue to begin load up, observe intently. Give positive feedback if proper.",
-      "CONCENTRIC: Move until knees are maximally bent, with the 'click' after the brief pause or squeeze.",
-      "ECCENTRIC: After load up and first concentric, cue 'ease out and do not speed up'.",
-      "LOWER TURNAROUND: Establish expectation: 'touch and go' or 'be continuous' or 'barely touch, barely start'.",
-      "Keep hips down by anchoring with the hands.",
-      "After lower turnaround at beginning of third rep, dorsiflex ankles AFTER the change of direction.",
-      "Cue: 'keep ankles relaxed during the turn…now pull the feet up to the knees'.",
-      "At upper turn cue: 'keep ankles flexed, keep movement arm still, keep breathing, [click], relax the ankles, THEN ease out'. Ensure no movement occurs while relaxing ankles.",
-      "Pace: 1-second pause on first two reps, 2-3 second 'squeeze' from third rep on.",
-      "Maintain posture, head position, pace, and contact on roller pads. Movement only at knee joint.",
-      "Record only full reps. Continuing set after concentric failure is highly individual and should be discussed with a leader."
-    ],
-    clinicalWarnings: [
-      "Gradual load up may take 3 to 5 seconds. Use imagery like 'just barely beginning to dent the roller pads'.",
-      "Relax feet/ankles on first two reps, then flex ankles during concentric from third rep on. This 'toggling' engages calf on concentric for tighter contraction, then relaxes on eccentric to isolate hamstring.",
-      "Leg curl has reputation for 'cramps'. These are often just sensations from unfamiliar knee flexion resistance and typically go away as strength increases.",
-      "If client physically cannot fully bend knees, redefine full ROM as 'limited ROM' or 'limit flexion' on chart.",
-      "Consider using a hard end stop at THEIR contracted position (upper turn) with extra selector pin. Document gap.",
-      "Full knee flexion is not a requirement. Focus on establishing neuromuscular connection.",
-      "Prolonged light sets may be counterproductive due to discomfort. Strive for 'faster' reps (6s/6s) and heavier weight leading to failure in ≤10 reps once form is perfect."
     ]
   },
   // Hips

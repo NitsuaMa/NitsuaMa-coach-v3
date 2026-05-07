@@ -305,31 +305,42 @@ export function ClientHistoryCalendar({
     <div className="flex flex-col h-full bg-[#0A2E46] overflow-hidden rounded-[40px] border border-white/10 shadow-2xl p-2 sm:p-6 text-white">
         <div className="flex items-center justify-between mb-8 shrink-0">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-[#F06C22]/10 rounded-2xl flex items-center justify-center border border-[#F06C22]/20 shadow-[0_0_15px_rgba(240,108,34,0.1)]">
+            <div className="w-14 h-14 bg-[#F06C22]/10 rounded-2xl flex items-center justify-center border border-[#F06C22]/20 shadow-[0_0_15px_rgba(240,108,34,0.1)] shrink-0">
               <CalendarIcon className="w-7 h-7 text-[#F06C22]" />
             </div>
             <div>
-              <h2 className="text-3xl font-black italic uppercase tracking-tighter leading-none">
-                {viewType === 'calendar' ? (viewDate instanceof Date && !isNaN(viewDate.getTime()) ? viewDate.toLocaleString('default', { month: 'long' }) : 'Invalid Date') : 'Client History'}
-              </h2>
+              <div className="flex items-center gap-4">
+                <h2 className="text-3xl font-black italic uppercase tracking-tighter leading-none shrink-0">
+                  {viewType === 'calendar' ? (viewDate instanceof Date && !isNaN(viewDate.getTime()) ? viewDate.toLocaleString('default', { month: 'long' }) : 'Invalid Date') : 'Client History'}
+                </h2>
+                {viewType === 'calendar' && (
+                  <div className="flex gap-1 shrink-0">
+                    <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="text-[#68717A] hover:text-white hover:bg-white/10 rounded-2xl h-8 w-8 transition-all">
+                      <ChevronLeft className="w-5 h-5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={handleNextMonth} className="text-[#68717A] hover:text-white hover:bg-white/10 rounded-2xl h-8 w-8 transition-all">
+                      <ChevronRight className="w-5 h-5" />
+                    </Button>
+                  </div>
+                )}
+              </div>
               <p className="text-xs font-black uppercase tracking-[0.2em] text-[#68717A] mt-1">
                 {viewType === 'calendar' ? viewDate.getFullYear() : `${sessions.length} Sessions Total`}
               </p>
             </div>
           </div>
           
-          <div className="flex bg-slate-800 p-1 rounded-full border border-slate-700 shadow-sm mx-4">
-             <button
-                onClick={() => setViewType('calendar')}
-                className={cn("px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all", viewType === 'calendar' ? "bg-[#38BDF8] text-white shadow-sm" : "text-slate-400 hover:text-white")}
-             >Calendar View</button>
-             <button
-                onClick={() => setViewType('list')}
-                className={cn("px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all", viewType === 'list' ? "bg-[#38BDF8] text-white shadow-sm" : "text-slate-400 hover:text-white")}
-             >List View</button>
-          </div>
-
           <div className="flex items-center gap-4">
+            <div className="flex bg-slate-800 p-1 rounded-full border border-slate-700 shadow-sm">
+               <button
+                  onClick={() => setViewType('calendar')}
+                  className={cn("px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all", viewType === 'calendar' ? "bg-[#38BDF8] text-white shadow-sm" : "text-slate-400 hover:text-white")}
+               >Calendar View</button>
+               <button
+                  onClick={() => setViewType('list')}
+                  className={cn("px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all", viewType === 'list' ? "bg-[#38BDF8] text-white shadow-sm" : "text-slate-400 hover:text-white")}
+               >List View</button>
+            </div>
             <Button 
                onClick={() => setShowManualLog(true)}
                variant="outline" 
@@ -337,25 +348,6 @@ export function ClientHistoryCalendar({
              >
                <PlusCircle className="w-4 h-4 mr-2" /> Log Past Session
             </Button>
-            <Button 
-               onClick={() => {
-                 window.dispatchEvent(new CustomEvent('open-bulk-import'));
-               }}
-               variant="outline" 
-               className="border-[#F06C22]/30 text-[#F06C22] hover:bg-[#F06C22]/10 font-black tracking-widest uppercase text-[10px] h-12 rounded-2xl px-6 shadow-sm"
-             >
-               <Maximize className="w-4 h-4 mr-2" /> Migration
-            </Button>
-            {viewType === 'calendar' && (
-              <div className="flex gap-2">
-                <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="text-[#68717A] hover:text-white hover:bg-white/10 rounded-2xl h-12 w-12 transition-all">
-                  <ChevronLeft className="w-8 h-8" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={handleNextMonth} className="text-[#68717A] hover:text-white hover:bg-white/10 rounded-2xl h-12 w-12 transition-all">
-                  <ChevronRight className="w-8 h-8" />
-                </Button>
-              </div>
-            )}
           </div>
         </div>
 
@@ -634,8 +626,11 @@ export function ClientHistoryCalendar({
                         else if (quality === 1) displayBorder = "border-rose-500 bg-rose-500/10";
 
                         const isCardio = machine?.name.toLowerCase().includes('cardio') || log.type === 'Cardio';
+                        const isStaticHold = Boolean(currentData.isStaticHold);
+                        const displayMetricType = isCardio ? 'Cardio' : (isStaticHold ? 'TSC' : 'Strength');
+                        
                         const wVal = parseFloat(String(currentData.weight || '').replace(/[^0-9.]/g, '')) || 0;
-                        const rVal = isCardio ? (parseFloat(String(currentData.seconds || '').replace(/[^0-9.]/g, '')) || 0) : (parseFloat(String(currentData.reps || '').replace(/[^0-9.]/g, '')) || 0);
+                        const rVal = isCardio || isStaticHold ? (parseFloat(String(currentData.seconds || '').replace(/[^0-9.]/g, '')) || 0) : (parseFloat(String(currentData.reps || '').replace(/[^0-9.]/g, '')) || 0);
 
                         return (
                           <div 
@@ -649,9 +644,12 @@ export function ClientHistoryCalendar({
                              {!isEditMode ? (
                                <div className="flex flex-col h-full justify-between">
                                  <div>
-                                   <h4 className="text-sm font-black uppercase tracking-tight text-white leading-none truncate mb-1">{machine?.name || 'Unknown'}</h4>
+                                   <div className="flex justify-between items-start gap-2">
+                                     <h4 className="text-sm font-black uppercase tracking-tight text-white leading-none truncate mb-1">{machine?.name || 'Unknown'}</h4>
+                                     {isStaticHold && <span className="px-1.5 py-0.5 rounded-md bg-[#38BDF8]/20 text-[#38BDF8] text-[8px] font-black tracking-widest uppercase">TSC</span>}
+                                   </div>
                                    <p className="text-xs font-bold text-slate-400">
-                                     {currentData.weight || '-'} lbs | {isCardio ? currentData.seconds : currentData.reps} {isCardio ? 'sec' : 'reps'}
+                                     {currentData.weight || '-'} lbs | {isCardio || isStaticHold ? currentData.seconds : currentData.reps} {isCardio || isStaticHold ? 'sec' : 'reps'}
                                    </p>
                                  </div>
                                   <div className="mt-2 text-[10px] font-black tracking-widest uppercase flex gap-1 items-center">
@@ -666,13 +664,33 @@ export function ClientHistoryCalendar({
                                <div className="flex flex-col gap-3">
                                   <div className="flex justify-between items-center bg-slate-900/50 p-2 rounded-xl">
                                     <h4 className="text-xs font-black uppercase tracking-widest text-white leading-none truncate">{machine?.name || 'Unknown'}</h4>
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{isCardio ? 'Cardio' : 'Strength'}</span>
+                                    {!isCardio && (
+                                       <button
+                                         onClick={() => {
+                                           const newIsHold = !isStaticHold;
+                                           handleLogEdit(log.id!, 'isStaticHold', newIsHold);
+                                           if (newIsHold) {
+                                             handleLogEdit(log.id!, 'seconds', currentData.reps || "0");
+                                             handleLogEdit(log.id!, 'reps', "0");
+                                           } else {
+                                             handleLogEdit(log.id!, 'reps', currentData.seconds || "0");
+                                             handleLogEdit(log.id!, 'seconds', "0");
+                                           }
+                                         }}
+                                         className={cn("px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-colors",
+                                           isStaticHold ? "bg-[#38BDF8] text-white" : "bg-slate-800 text-slate-500 hover:text-white"
+                                         )}
+                                       >
+                                         TSC
+                                       </button>
+                                    )}
+                                    {isCardio && <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Cardio</span>}
                                   </div>
 
                                   {/* Weight Stepper */}
                                   <div className="bg-slate-900 border border-slate-700 rounded-xl p-1.5 flex items-center justify-between shrink-0">
                                      <button 
-                                       onClick={() => handleLogEdit(log.id!, 'weight', Math.max(0, wVal - 2))}
+                                       onClick={() => handleLogEdit(log.id!, 'weight', Math.max(0, wVal - 2).toString())}
                                        className="w-10 h-10 shrink-0 flex items-center justify-center text-slate-400 bg-slate-800 rounded-lg hover:bg-slate-700 hover:text-white transition-all focus:outline-none"
                                      >
                                        <span className="text-xl font-medium leading-none mb-1">-2</span>
@@ -681,13 +699,13 @@ export function ClientHistoryCalendar({
                                        <input 
                                          type="number"
                                          value={wVal || ''}
-                                         onChange={(e) => handleLogEdit(log.id!, 'weight', parseFloat(e.target.value) || 0)}
+                                         onChange={(e) => handleLogEdit(log.id!, 'weight', (parseFloat(e.target.value) || 0).toString())}
                                          className="w-16 min-w-[4rem] bg-transparent text-center text-xl font-black text-white focus:outline-none p-0"
                                        />
                                        <span className="text-[9px] uppercase tracking-widest text-slate-500 font-bold leading-none mt-0.5">Lbs</span>
                                      </div>
                                      <button 
-                                       onClick={() => handleLogEdit(log.id!, 'weight', wVal + 2)}
+                                       onClick={() => handleLogEdit(log.id!, 'weight', (wVal + 2).toString())}
                                        className="w-10 h-10 shrink-0 flex items-center justify-center text-slate-400 bg-slate-800 rounded-lg hover:bg-slate-700 hover:text-white transition-all focus:outline-none"
                                      >
                                        <span className="text-xl font-medium leading-none mb-1">+2</span>
@@ -697,7 +715,7 @@ export function ClientHistoryCalendar({
                                   {/* Reps/Time Stepper */}
                                   <div className="bg-slate-900 border border-slate-700 rounded-xl p-1.5 flex items-center justify-between shrink-0">
                                      <button 
-                                       onClick={() => handleLogEdit(log.id!, isCardio ? 'seconds' : 'reps', Math.max(0, rVal - 1))}
+                                       onClick={() => handleLogEdit(log.id!, isCardio || isStaticHold ? 'seconds' : 'reps', Math.max(0, rVal - 1).toString())}
                                        className="w-10 h-10 shrink-0 flex items-center justify-center text-slate-400 bg-slate-800 rounded-lg hover:bg-slate-700 hover:text-white transition-all focus:outline-none"
                                      >
                                        <span className="text-xl font-medium leading-none mb-1">-1</span>
@@ -706,14 +724,14 @@ export function ClientHistoryCalendar({
                                        <input 
                                          type="number"
                                          value={rVal || ''}
-                                         onChange={(e) => handleLogEdit(log.id!, isCardio ? 'seconds' : 'reps', parseFloat(e.target.value) || 0)}
+                                         onChange={(e) => handleLogEdit(log.id!, isCardio || isStaticHold ? 'seconds' : 'reps', (parseFloat(e.target.value) || 0).toString())}
                                          className="w-16 min-w-[4rem] bg-transparent text-center text-xl font-black text-white focus:outline-none p-0"
                                          disabled={isCardio && false} 
                                        />
-                                       <span className="text-[9px] uppercase tracking-widest text-slate-500 font-bold leading-none mt-0.5">{isCardio ? 'Secs' : 'Reps'}</span>
+                                       <span className="text-[9px] uppercase tracking-widest text-slate-500 font-bold leading-none mt-0.5">{isCardio || isStaticHold ? 'Secs' : 'Reps'}</span>
                                      </div>
                                      <button 
-                                       onClick={() => handleLogEdit(log.id!, isCardio ? 'seconds' : 'reps', rVal + 1)}
+                                       onClick={() => handleLogEdit(log.id!, isCardio || isStaticHold ? 'seconds' : 'reps', (rVal + 1).toString())}
                                        className="w-10 h-10 shrink-0 flex items-center justify-center text-slate-400 bg-slate-800 rounded-lg hover:bg-slate-700 hover:text-white transition-all focus:outline-none"
                                      >
                                        <span className="text-xl font-medium leading-none mb-1">+1</span>

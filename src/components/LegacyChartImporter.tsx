@@ -58,6 +58,7 @@ interface ValidationSession {
   trainer: string;
   trainerId?: string;
   machines: ValidationLog[];
+  isInferredDate?: boolean;
 }
 
 const legacyMachineMap: Record<string, string> = {
@@ -150,9 +151,18 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
       const sessionsMap: Record<number, ValidationSession> = {};
 
       // 1. Map over headers first to establish sessions
-      ocrResult.sessionHeaders.forEach(header => {
+      ocrResult.sessionHeaders.forEach((header, index, array) => {
         const sNum = header.sessionNumber;
         
+        let dateString = header.date?.trim();
+        let isInferredDate = false;
+
+        // Date Fallback Rule
+        if (!dateString || dateString.toLowerCase() === 'confirm' || dateString === '0') {
+            isInferredDate = true;
+            // Let's defer calculating the date until we have sorted them chronologically
+        }
+
         // Find matching trainer initials in our database
         const trainerMatch = trainers.find(t => 
           t.initials.toLowerCase() === (header.trainer || '').toLowerCase()
@@ -161,14 +171,15 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
         sessionsMap[sNum] = {
           id: `v-sess-${sNum}-${Date.now()}-${Math.random()}`,
           sessionNumber: sNum,
-          date: header.date || '',
+          date: dateString || '',
           trainer: header.trainer || 'Legacy',
           trainerId: trainerMatch?.id || 'legacy-trainer',
-          machines: []
+          machines: [],
+          isInferredDate
         };
       });
 
-      // 2. Stitch performances to headers
+      // Stitch performances to headers
       ocrResult.performances.forEach(perf => {
         const sNum = perf.sessionNumber;
         
@@ -180,15 +191,32 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
             date: '',
             trainer: 'Legacy',
             trainerId: 'legacy-trainer',
-            machines: []
+            machines: [],
+            isInferredDate: true
           };
         }
 
-        // Deterministic Static Hold Logic
-        const isSH = perf.isStaticHold || 
-                     Number(perf.reps) > 20 || 
-                     String(perf.reps || '').toUpperCase().includes('SH');
+        const repStr = String(perf.reps || '').toLowerCase().trim();
+
+        // The "Ghost Rep" Rule (Skips)
+        if (repStr === '.' || repStr === '-' || repStr === '' || repStr === '0' || perf.reps === undefined) {
+          return; // Skip completely
+        }
+
+        let finalReps: number | string = Number(perf.reps) || 0;
+        let isTSC = perf.isStaticHold || false;
         
+        // Static Hold (TSC) Detection
+        if (repStr.includes('s') || repStr.includes('sec') || repStr.includes('hold')) {
+          isTSC = true;
+          const match = repStr.match(/\d+/);
+          if (match) {
+             finalReps = parseInt(match[0], 10);
+          }
+        } else if (Number(perf.reps) > 20 || repStr.includes('sh')) {
+          isTSC = true;
+        }
+
         const rawMachineName = perf.machineName;
         const normalizedName = normalizeMachineName(rawMachineName);
 
@@ -204,17 +232,42 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
           rawName: rawMachineName,
           settings: perf.settings,
           weight: Number(perf.weight) || 0,
-          reps: isSH ? 0 : Number(perf.reps) || 0,
-          isStaticHold: isSH,
-          timeUnderLoad: isSH ? (Number(perf.reps) || 90) : 0,
+          reps: finalReps,
+          isStaticHold: isTSC,
+          timeUnderLoad: isTSC ? (Number(finalReps) || 90) : 0,
           machineId: machineMatch?.id,
-          isAnomalous: !machineMatch || (Number(perf.weight) === 0 && !isSH),
-          anomalyReason: !machineMatch ? `Unknown Machine: ${normalizedName}` : 'Missing Data'
+          isAnomalous: !machineMatch,
+          anomalyReason: !machineMatch ? `Unknown Machine: ${normalizedName}` : undefined
         });
       });
 
       // 3. Convert to sorted array
       let mappedSessions = Object.values(sessionsMap).sort((a, b) => a.sessionNumber - b.sessionNumber);
+
+      // Apply Date Fallback chronologically
+      let lastValidDate = new Date();
+      mappedSessions.forEach((sess, idx) => {
+        if (!sess.isInferredDate) {
+           const ts = parseSessionDate(sess.date);
+           if (ts > 0) {
+             lastValidDate = new Date(ts);
+           } else {
+             sess.isInferredDate = true;
+           }
+        }
+        
+        if (sess.isInferredDate) {
+          if (idx > 0) {
+            // Previous Session Date + 4 Days
+            lastValidDate = new Date(lastValidDate.getTime() + 4 * 24 * 60 * 60 * 1000);
+          }
+          const mm = String(lastValidDate.getMonth() + 1).padStart(2, '0');
+          const dd = String(lastValidDate.getDate()).padStart(2, '0');
+          const yyyy = lastValidDate.getFullYear();
+          sess.date = `${yyyy}-${mm}-${dd}`;
+        }
+      });
+
       setValidationSessions(mappedSessions);
       setScanProgress('OCR Pipeline Complete');
     } catch (err) {
@@ -690,165 +743,141 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
                       </div>
                     </div>
 
-                    {validationSessions.map((session) => (
-                      <div key={session.id} className="space-y-3">
-                        <div className={cn(
-                          "flex items-center gap-3 bg-slate-900/80 p-3 rounded-lg border transition-all",
-                          (!session.date || !session.trainer) ? "border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.1)]" : "border-slate-800"
-                        )}>
-                          <Badge className={cn(
-                            "font-black border-transparent",
-                            (!session.date || !session.trainer) ? "bg-amber-600 text-white" : "bg-slate-800 text-white border-slate-700"
-                          )}>
-                            S#{session.sessionNumber}
-                          </Badge>
-                          <div className="flex-1 flex items-center gap-4">
-                            <div className="flex items-center gap-1.5 px-4 border-r border-slate-800">
-                               <p className="text-[10px] font-black text-[#F06C22] uppercase">Machines Logged: {session.machines.length}</p>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <Calendar className={cn("w-3 h-3 transition-colors", !session.date ? "text-amber-500 animate-pulse" : "text-slate-500")} />
-                              <input 
-                                type="text"
-                                placeholder="MM/DD/YYYY"
-                                value={session.date}
-                                onChange={e => setValidationSessions(prev => prev.map(s => s.id === session.id ? { ...s, date: e.target.value } : s))}
-                                className={cn(
-                                  "bg-transparent border transition-all text-[10px] font-black uppercase tracking-widest focus:ring-0 px-2 py-1 rounded w-24",
-                                  !session.date ? "border-amber-500 text-amber-500 bg-amber-500/10" : "border-transparent text-[#F06C22]"
-                                )}
-                              />
-                            </div>
-                            <div className="flex items-center gap-1.5 border-l border-slate-800 pl-4">
-                              <User className={cn("w-3 h-3 transition-colors", !session.trainer ? "text-amber-500 animate-pulse" : "text-slate-500")} />
-                              <span className="text-[10px] font-black text-slate-300 uppercase">Trainer:</span>
-                              <input 
-                                value={session.trainer}
-                                placeholder="INI"
-                                onChange={e => setValidationSessions(prev => prev.map(s => s.id === session.id ? { ...s, trainer: e.target.value } : s))}
-                                className={cn(
-                                  "bg-transparent border transition-all text-[10px] font-black uppercase focus:ring-0 w-16 px-2 py-1 rounded",
-                                  !session.trainer ? "border-amber-500 text-amber-500 bg-amber-500/10" : "border-transparent text-white"
-                                )}
-                              />
-                            </div>
-                          </div>
-                          {(!session.date || !session.trainer) && (
-                            <Badge variant="outline" className="text-[8px] font-black text-amber-500 border-amber-500/30 animate-pulse">
-                              MISSING HEADER DATA
-                            </Badge>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-1.5">
-                          {session.machines.map((log) => (
-                            <div 
-                              key={log.id} 
-                              className={cn(
-                                "p-2 rounded border shadow-lg relative group transition-all",
-                                log.isStaticHold 
-                                  ? "border-blue-500 bg-blue-500/10 shadow-[0_0_15px_rgba(59,130,246,0.1)]" 
-                                  : log.isAnomalous 
-                                    ? "border-amber-500 bg-amber-500/10" 
-                                    : "border-[#F06C22]/50 bg-[#F06C22]/5 hover:border-[#F06C22]" // Quality 3 styling
-                              )}
-                            >
-                              <div className="flex flex-col mb-2">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1 mr-1">
-                                    <input 
-                                      value={log.name} 
-                                      onChange={e => updateLogData(session.id, log.id, 'name', e.target.value)}
-                                      className="bg-transparent border-none text-[9px] font-black text-white uppercase tracking-tighter w-full focus:ring-0 p-0 truncate"
-                                    />
-                                    {log.rawName && log.rawName.toLowerCase() !== log.name.toLowerCase() && (
-                                      <p className="text-[7px] text-slate-500 font-bold uppercase truncate -mt-0.5">
-                                        Raw: {log.rawName}
-                                      </p>
-                                    )}
-                                  </div>
-                                  {log.isAnomalous && (
-                                    <div className="group/tip relative cursor-help">
-                                      <AlertTriangle className="w-3 h-3 text-amber-500" />
-                                      <div className="absolute bottom-full right-0 mb-2 w-40 p-2 bg-amber-600 text-white text-[7px] font-bold rounded shadow-xl opacity-0 group-hover/tip:opacity-100 transition-opacity pointer-events-none z-10">
-                                        {log.anomalyReason}
-                                      </div>
+                    <div className="overflow-x-auto pb-6">
+                      <table className="border-collapse table-fixed min-w-max w-full">
+                        <thead>
+                          <tr>
+                            <th className="sticky left-0 z-20 bg-[#0A2E46] border-r border-b border-slate-700 w-[200px] p-2 text-left">
+                              <span className="text-[10px] font-black italic uppercase text-[#F06C22]">Machine / Session</span>
+                            </th>
+                            {validationSessions.map(session => (
+                              <th key={session.id} className={cn(
+                                "w-[120px] p-2 bg-slate-900 border-r border-b border-slate-800 text-center relative group",
+                                session.isInferredDate && "border-amber-500/50 shadow-[inset_0_0_10px_rgba(245,158,11,0.1)]"
+                              )}>
+                                <div className="flex flex-col items-center">
+                                  <Badge className={cn("text-[9px] font-black h-4 px-1 rounded-sm mb-1", session.isInferredDate ? "bg-amber-600 border-none text-white" : "bg-slate-800 border-slate-700 text-white")}>
+                                    S#{session.sessionNumber}
+                                  </Badge>
+                                  <input 
+                                    className={cn("bg-transparent border-b border-transparent focus:border-[#F06C22] w-[80px] text-[10px] font-bold text-center outline-none transition-all", session.isInferredDate ? "text-amber-400" : "text-white")}
+                                    value={session.date}
+                                    placeholder="MM/DD/YYYY"
+                                    onChange={e => setValidationSessions(prev => prev.map(s => s.id === session.id ? { ...s, date: e.target.value, isInferredDate: false } : s))}
+                                  />
+                                  <input 
+                                    className="bg-transparent border-b border-transparent focus:border-[#F06C22] w-[40px] text-[9px] text-slate-400 text-center outline-none transition-all mt-0.5 uppercase"
+                                    value={session.trainer}
+                                    placeholder="INI"
+                                    onChange={e => setValidationSessions(prev => prev.map(s => s.id === session.id ? { ...s, trainer: e.target.value } : s))}
+                                  />
+                                  {session.isInferredDate && (
+                                    <div className="absolute -top-3 right-1/2 translate-x-1/2 whitespace-nowrap bg-amber-500 text-slate-950 font-black text-[7px] px-1 py-0.5 rounded uppercase flex items-center shadow-lg pointer-events-none">
+                                      <AlertTriangle size={8} className="mr-0.5" /> Inferred (+4)
                                     </div>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-1 mt-0.5">
-                                  <Badge variant="outline" className="text-[6px] font-bold py-0 h-3 border-slate-700 text-slate-500 bg-slate-800/50">
-                                    {log.settings || 'NO SETTINGS'}
-                                  </Badge>
-                                  {log.isStaticHold && (
-                                    <Badge className="text-[6px] font-black py-0 h-3 bg-blue-500 text-white uppercase">
-                                      TUL/SH
-                                    </Badge>
-                                  )}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/50">
+                          {Array.from(new Set(validationSessions.flatMap(s => s.machines.map(m => m.name)))).map(machineName => (
+                            <tr key={machineName} className="group hover:bg-slate-800/30 transition-colors">
+                              <th className="sticky left-0 z-10 bg-[#0A2E46] border-r border-slate-700 p-2 text-left align-middle group-hover:bg-slate-800/80 shadow-[2px_0_10px_rgba(0,0,0,0.02)]">
+                                <div className="flex flex-col justify-center">
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <div className="w-4 h-4 rounded-md bg-slate-800 flex items-center justify-center shrink-0 shadow-sm shadow-zinc-200">
+                                      <Dumbbell className="w-2.5 h-2.5 text-white" />
+                                    </div>
+                                    <span className="text-[11px] font-black uppercase text-white truncate max-w-[150px]">{machineName}</span>
+                                  </div>
                                 </div>
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-1.5 mb-2">
-                                <div>
-                                  <label className="text-[6px] font-black text-slate-500 uppercase block mb-0.5">LBS</label>
-                                  <input 
-                                    type="number"
-                                    value={log.weight}
-                                    onChange={e => updateLogData(session.id, log.id, 'weight', parseInt(e.target.value) || 0)}
-                                    className="w-full bg-slate-950 border border-slate-800 rounded px-1 py-0.5 text-[10px] font-black text-white focus:border-[#F06C22] focus:ring-0 h-7"
-                                  />
-                                </div>
-                                <div>
-                                  <label className={cn(
-                                    "text-[6px] font-black uppercase block mb-0.5",
-                                    log.isStaticHold ? "text-blue-400" : "text-slate-500"
-                                  )}>
-                                    {log.isStaticHold ? 'SEC' : 'REPS'}
-                                  </label>
-                                  <input 
-                                    type="number"
-                                    value={log.isStaticHold ? (log.timeUnderLoad ?? 0) : (log.reps ?? 0)}
-                                    onChange={e => updateLogData(session.id, log.id, log.isStaticHold ? 'timeUnderLoad' : 'reps', parseInt(e.target.value) || 0)}
-                                    className={cn(
-                                      "w-full bg-slate-950 border border-slate-800 rounded px-1 py-0.5 text-[10px] font-black focus:ring-0 h-7",
-                                      log.isStaticHold ? "text-blue-400 border-blue-500/30" : "text-white focus:border-[#F06C22]"
+                              </th>
+                              {validationSessions.map(session => {
+                                const log = session.machines.find(m => m.name === machineName);
+                                return (
+                                  <td key={session.id} className="border-r border-slate-700/50 p-2 align-middle hover:bg-slate-700/50 transition-colors h-[64px]">
+                                    {log ? (
+                                      <div className="flex flex-col items-center gap-1 group/cell">
+                                        <div className="flex items-baseline justify-center gap-1">
+                                          <input 
+                                            className="bg-transparent text-white font-black w-10 text-center border-b border-slate-700/50 focus:border-[#F06C22] focus:outline-none text-sm transition-all"
+                                            value={log.weight}
+                                            onChange={e => updateLogData(session.id, log.id, 'weight', parseInt(e.target.value) || 0)}
+                                            placeholder="LBS"
+                                            title="Weight (lbs)"
+                                          />
+                                          <span className="text-slate-600 text-[8px] font-black">X</span>
+                                          <input 
+                                            className={cn("bg-transparent font-black w-10 text-center border-b border-slate-700/50 focus:border-[#F06C22] focus:outline-none text-sm transition-all", log.isStaticHold ? "text-blue-400" : "text-white")}
+                                            value={log.isStaticHold ? (log.timeUnderLoad ?? 0) : (log.reps ?? 0)}
+                                            onChange={e => updateLogData(session.id, log.id, log.isStaticHold ? 'timeUnderLoad' : 'reps', parseInt(e.target.value) || 0)}
+                                            placeholder={log.isStaticHold ? "SEC" : "REP"}
+                                            title={log.isStaticHold ? "Seconds" : "Reps"}
+                                          />
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-1">
+                                          <label className="flex items-center gap-1 cursor-pointer" title="Static Hold (TSC)">
+                                            <input 
+                                              type="checkbox" 
+                                              checked={log.isStaticHold} 
+                                              onChange={e => updateLogData(session.id, log.id, 'isStaticHold', e.target.checked)}
+                                              className="w-2.5 h-2.5 bg-slate-900 border-slate-700 rounded text-[#F06C22] focus:ring-[#F06C22] focus:ring-offset-0"
+                                            />
+                                            <span className={cn("text-[7px] font-black uppercase tracking-tighter", log.isStaticHold ? "text-blue-400" : "text-slate-600")}>
+                                              TSC
+                                            </span>
+                                          </label>
+                                          
+                                          <button 
+                                            onClick={() => {
+                                              setValidationSessions(prev => prev.map(s => {
+                                                if (s.id !== session.id) return s;
+                                                return { ...s, machines: s.machines.filter(l => l.id !== log.id) };
+                                              }))
+                                            }}
+                                            className="text-slate-600 hover:text-red-500 opacity-0 group-hover/cell:opacity-100 transition-all p-0.5 hover:bg-slate-800 rounded"
+                                            title="Delete Log"
+                                          >
+                                            <Trash2 size={10} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center justify-center opacity-10">
+                                        <div className="w-1 h-1 rounded-full bg-slate-600" />
+                                      </div>
                                     )}
-                                  />
-                                </div>
-                              </div>
-                              
-                              <div className="flex items-center justify-between gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <div className="text-[6px] font-black text-slate-600 uppercase tracking-widest truncate">
-                                  {log.isStaticHold ? 'STAT_MODE' : 'DYN_MODE'}
-                                </div>
-                                <div className="flex gap-1">
-                                  <button 
-                                    onClick={() => duplicateLog(session.id, log.id)}
-                                    className="p-1 bg-slate-800 text-slate-400 hover:text-[#F06C22] hover:bg-[#F06C22]/10 rounded transition-colors"
-                                  >
-                                    <Copy size={8} />
-                                  </button>
-                                  <button 
-                                    onClick={() => {
-                                      setValidationSessions(prev => prev.map(s => {
-                                        if (s.id !== session.id) return s;
-                                        return {
-                                          ...s,
-                                          machines: s.machines.filter(l => l.id !== log.id)
-                                        };
-                                      }))
-                                    }}
-                                    className="p-1 bg-slate-800 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
-                                  >
-                                    <Trash2 size={8} />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
+                                  </td>
+                                );
+                              })}
+                            </tr>
                           ))}
-                        </div>
+                        </tbody>
+                      </table>
+                    </div>
+                    {validationSessions.length > 0 && (
+                      <div className="mt-8 mb-4">
+                        <Button 
+                          onClick={finalizeImport}
+                          disabled={isFinalizing || validationSessions.some(s => !s.date)}
+                          className="w-full flex items-center justify-center gap-3 bg-[#F06C22] hover:bg-[#D95B16] text-white font-black text-lg h-20 tracking-widest uppercase transition-all shadow-[0_10px_40px_rgba(240,108,34,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isFinalizing ? (
+                            <>
+                              <div className="w-6 h-6 rounded-full border-4 border-white/20 border-t-white animate-spin"></div>
+                              Committing Data...
+                            </>
+                          ) : (
+                            <>
+                              <ArrowRight className="w-8 h-8" />
+                              Confirm & Commit Migration
+                            </>
+                          )}
+                        </Button>
                       </div>
-                    ))}
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

@@ -4132,6 +4132,8 @@ function PerformanceEntryDialog({
   pastMachineLogs,
   isStaticHold,
   side,
+  isTorsoFull,
+  currentRepsRight,
   onSave,
   onClose,
   machineSettings
@@ -4144,19 +4146,24 @@ function PerformanceEntryDialog({
   pastMachineLogs: { log: ExerciseLog; session: WorkoutSession }[];
   isStaticHold?: boolean;
   side?: 'Left' | 'Right';
-  onSave: (weight: string, target: string, repsOrSeconds: string, quality: number, isHold: boolean, side?: 'Left' | 'Right') => void;
+  isTorsoFull?: boolean;
+  currentRepsRight?: string;
+  onSave: (weight: string, target: string, repsOrSeconds: string, quality: number, isHold: boolean, side?: 'Left' | 'Right', repsRight?: string) => void;
   onClose: () => void;
   machineSettings?: ClientMachineSetting;
 }) {
   const prevLog = pastMachineLogs[0]?.log;
   const prevWeight = prevLog?.weight || '0';
-  const prevReps = prevLog?.isStaticHold ? (prevLog.seconds || '0') : (prevLog?.reps || '0');
+  const prevRepsLeft = prevLog?.isStaticHold ? (prevLog.seconds || '0') : (prevLog?.reps || '0');
+  const prevRepsRightStr = (prevLog as any)?.repsRight?.toString() || '0'; // Only used if using repsLeft/repsRight model, but we will pass initial values instead
 
   const initialWeight = parseFloat(currentWeight) > 0 ? parseFloat(currentWeight) : (parseFloat(prevWeight) || 0);
-  const initialReps = parseFloat(currentReps) > 0 ? parseFloat(currentReps) : (parseFloat(prevReps) || 0);
+  const initialReps = parseFloat(currentReps) > 0 ? parseFloat(currentReps) : (parseFloat(prevRepsLeft) || 0);
+  const initialRepsRight = currentRepsRight !== undefined && parseFloat(currentRepsRight) > 0 ? parseFloat(currentRepsRight) : (parseFloat(prevRepsRightStr) || initialReps);
   
   const [current, setCurrent] = useState(initialWeight);
   const [reps, setReps] = useState(initialReps);
+  const [repsRt, setRepsRt] = useState(initialRepsRight);
   const [quality, setQuality] = useState(currentQuality || 2); 
   const [isHold, setIsHold] = useState(isStaticHold || false);
 
@@ -4164,6 +4171,7 @@ function PerformanceEntryDialog({
 
   const adjustCurrent = (amount: number) => setCurrent(Math.max(0, roundUpTo2(current + amount)));
   const adjustReps = (amount: number) => setReps(Math.max(0, reps + amount));
+  const adjustRepsRt = (amount: number) => setRepsRt(Math.max(0, repsRt + amount));
 
   const prevW = parseFloat(prevWeight) || 0;
   const weightDelta = prevW > 0 ? current - prevW : 0;
@@ -4249,7 +4257,7 @@ function PerformanceEntryDialog({
           <div className="grid grid-cols-1 gap-4">
             {/* Smart Stepper: Reps / Seconds */}
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-3 flex flex-col items-center relative">
-              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/50 rounded-xl p-1 mb-2.5 w-full max-w-[180px]">
+              <div className="flex items-center justify-center gap-1.5 bg-slate-900 border border-slate-700/50 rounded-xl p-1 mb-2.5 w-full max-w-[180px]">
                 <button 
                   onClick={() => setIsHold(false)}
                   className={`flex-1 h-6 rounded-lg font-black uppercase text-[8px] tracking-widest transition-all ${!isHold ? 'bg-[#38BDF8] text-white' : 'text-slate-600 hover:text-slate-400'}`}
@@ -4264,31 +4272,64 @@ function PerformanceEntryDialog({
                 </button>
               </div>
 
-              <div className="flex items-center justify-between w-full h-12 px-1">
-                <button 
-                  className="w-10 h-10 rounded-xl bg-slate-700/50 text-slate-400 font-black text-lg flex items-center justify-center active:scale-95 transition-transform border border-slate-600/30"
-                  onClick={() => adjustReps(-1)}
-                >
-                  -1
-                </button>
-                
-                <div className="flex flex-col items-center justify-center flex-1">
-                  <input 
-                    type="number"
-                    inputMode="numeric"
-                    value={reps || ''}
-                    onChange={e => setReps(parseFloat(e.target.value) || 0)}
-                    className="font-black text-4xl text-white tracking-tight leading-none bg-transparent border-none text-center outline-none w-full p-0 m-0 no-arrows focus:ring-0"
-                  />
-                </div>
+              {!isTorsoFull ? (
+                <div className="flex items-center justify-between w-full h-12 px-1">
+                  <button 
+                    className="w-10 h-10 rounded-xl bg-slate-700/50 text-slate-400 font-black text-lg flex items-center justify-center active:scale-95 transition-transform border border-slate-600/30 shrink-0"
+                    onClick={() => adjustReps(-1)}
+                  >
+                    -1
+                  </button>
+                  
+                  <div className="flex flex-col items-center justify-center flex-1 min-w-0">
+                    <input 
+                      type="number"
+                      inputMode="numeric"
+                      value={reps || ''}
+                      onChange={e => setReps(parseFloat(e.target.value) || 0)}
+                      className="font-black text-4xl text-white tracking-tight leading-none bg-transparent border-none text-center outline-none w-full p-0 m-0 no-arrows focus:ring-0"
+                    />
+                  </div>
 
-                <button 
-                  className="w-10 h-10 rounded-xl bg-[#38BDF8] text-white font-black text-lg flex items-center justify-center shadow-[0_4px_12px_rgba(56,189,248,0.3)] active:scale-95 transition-transform"
-                  onClick={() => adjustReps(1)}
-                >
-                  +1
-                </button>
-              </div>
+                  <button 
+                    className="w-10 h-10 rounded-xl bg-[#38BDF8] text-white font-black text-lg flex items-center justify-center shadow-[0_4px_12px_rgba(56,189,248,0.3)] active:scale-95 transition-transform shrink-0"
+                    onClick={() => adjustReps(1)}
+                  >
+                    +1
+                  </button>
+                </div>
+              ) : (
+                 <div className="flex items-center gap-4 w-full px-1">
+                    <div className="flex flex-col items-center flex-1 bg-slate-900/50 p-2 rounded-xl border border-slate-700/50">
+                       <span className="text-[9px] font-black uppercase tracking-widest text-[#F06C22] mb-1">Left ({isHold ? 'SEC' : 'REPS'})</span>
+                       <div className="flex items-center justify-between w-full h-10">
+                          <button onClick={() => adjustReps(-1)} className="w-8 h-8 rounded-lg bg-slate-700/50 text-slate-400 font-black text-sm flex items-center justify-center active:scale-95 border border-slate-600/30 shrink-0">-</button>
+                          <input 
+                            type="number"
+                            inputMode="numeric"
+                            value={reps || ''}
+                            onChange={e => setReps(parseFloat(e.target.value) || 0)}
+                            className="font-black text-2xl text-white tracking-tight leading-none bg-transparent border-none text-center outline-none w-full p-0 m-0 no-arrows focus:ring-0 min-w-0"
+                          />
+                          <button onClick={() => adjustReps(1)} className="w-8 h-8 rounded-lg bg-[#38BDF8] text-white font-black text-sm flex items-center justify-center shadow-lg active:scale-95 shrink-0">+</button>
+                       </div>
+                    </div>
+                    <div className="flex flex-col items-center flex-1 bg-slate-900/50 p-2 rounded-xl border border-slate-700/50">
+                       <span className="text-[9px] font-black uppercase tracking-widest text-[#F06C22] mb-1">Right ({isHold ? 'SEC' : 'REPS'})</span>
+                       <div className="flex items-center justify-between w-full h-10">
+                          <button onClick={() => adjustRepsRt(-1)} className="w-8 h-8 rounded-lg bg-slate-700/50 text-slate-400 font-black text-sm flex items-center justify-center active:scale-95 border border-slate-600/30 shrink-0">-</button>
+                          <input 
+                            type="number"
+                            inputMode="numeric"
+                            value={repsRt || ''}
+                            onChange={e => setRepsRt(parseFloat(e.target.value) || 0)}
+                            className="font-black text-2xl text-white tracking-tight leading-none bg-transparent border-none text-center outline-none w-full p-0 m-0 no-arrows focus:ring-0 min-w-0"
+                          />
+                          <button onClick={() => adjustRepsRt(1)} className="w-8 h-8 rounded-lg bg-[#38BDF8] text-white font-black text-sm flex items-center justify-center shadow-lg active:scale-95 shrink-0">+</button>
+                       </div>
+                    </div>
+                 </div>
+              )}
             </div>
 
             {/* Quality Rating */}
@@ -4370,7 +4411,7 @@ function PerformanceEntryDialog({
           <Button variant="outline" className="h-12 rounded-xl font-black uppercase text-[11px] tracking-widest border border-slate-600 bg-slate-700/50 text-slate-300 hover:bg-slate-700 hover:text-white transition-all shadow-md" onClick={onClose}>
             Cancel
           </Button>
-          <Button className="h-12 rounded-xl font-black uppercase text-[11px] tracking-widest bg-[#F06C22] text-white hover:bg-[#ea580c] shadow-[0_4px_15px_rgba(240,108,34,0.4)] border-none active:scale-95 transition-all" onClick={() => onSave(current.toString(), currentNextWeight || current.toString(), reps.toString(), quality, isHold, side)}>
+          <Button className="h-12 rounded-xl font-black uppercase text-[11px] tracking-widest bg-[#F06C22] text-white hover:bg-[#ea580c] shadow-[0_4px_15px_rgba(240,108,34,0.4)] border-none active:scale-95 transition-all" onClick={() => onSave(current.toString(), currentNextWeight || current.toString(), reps.toString(), quality, isHold, side, repsRt.toString())}>
             Save Set
           </Button>
         </div>
@@ -5878,72 +5919,109 @@ function WorkoutTrackerView({
         </div>
       )}
       {/* Machine Performance Entry Dialog */}
-      {editingWeightMachineId && currentSession && (
-        <PerformanceEntryDialog 
-          machine={machines.find(m => m.id === editingWeightMachineId)!}
-          side={editingWeightSide}
-          machineSettings={clientMachineSettings[editingWeightMachineId]}
-          currentWeight={logs[`${currentSession.id}_${editingWeightMachineId}${editingWeightSide ? '_' + editingWeightSide : ''}`]?.weight || '0'}
-          currentNextWeight={logs[`${currentSession.id}_${editingWeightMachineId}${editingWeightSide ? '_' + editingWeightSide : ''}`]?.targetWeight || ''}
-          currentReps={logs[`${currentSession.id}_${editingWeightMachineId}${editingWeightSide ? '_' + editingWeightSide : ''}`]?.isStaticHold ? (logs[`${currentSession.id}_${editingWeightMachineId}${editingWeightSide ? '_' + editingWeightSide : ''}`]?.seconds || '0') : (logs[`${currentSession.id}_${editingWeightMachineId}${editingWeightSide ? '_' + editingWeightSide : ''}`]?.reps || '0')}
-          currentQuality={logs[`${currentSession.id}_${editingWeightMachineId}${editingWeightSide ? '_' + editingWeightSide : ''}`]?.repQuality || 0}
-          pastMachineLogs={sessions
-            .filter(s => currentSession ? s.id !== currentSession.id : true)
-            .map(s => {
-              const log = logs[`${s.id}_${editingWeightMachineId}${editingWeightSide ? '_' + editingWeightSide : ''}`] || logs[`${s.id}_${editingWeightMachineId}`];
-              return log && log.weight ? { log, session: s } : null;
-            })
-            .filter((x): x is { log: ExerciseLog; session: WorkoutSession } => Boolean(x))
-            .slice(0, 3)}
-          isStaticHold={logs[`${currentSession.id}_${editingWeightMachineId}${editingWeightSide ? '_' + editingWeightSide : ''}`]?.isStaticHold}
-          onClose={() => {
-            setEditingWeightMachineId(null);
-            setEditingWeightSide(undefined);
-          }}
-          onSave={async (weight, target, repsOrSeconds, quality, isHold, side) => {
-            const timeDiff = Math.floor((Date.now() - lastMachineLoggedAt.current) / 1000);
+      {editingWeightMachineId && currentSession && (() => {
+        const theMachine = machines.find(m => m.id === editingWeightMachineId)!;
+        const isTorso = theMachine.name.toLowerCase().includes('torso rotation');
+        
+        let sideToUse = editingWeightSide;
+        if (isTorso) sideToUse = undefined; // We handle both sides in the dialog
+        
+        const keyL = `${currentSession.id}_${editingWeightMachineId}_Left`;
+        const keyR = `${currentSession.id}_${editingWeightMachineId}_Right`;
+        const keyDef = `${currentSession.id}_${editingWeightMachineId}${sideToUse ? '_' + sideToUse : ''}`;
+        
+        const logL = isTorso ? logs[keyL] : logs[keyDef];
+        const logR = isTorso ? logs[keyR] : undefined;
 
-            await updateLog(currentSession.id!, editingWeightMachineId, 'weight', weight, side);
-            await updateLog(currentSession.id!, editingWeightMachineId, 'targetWeight', target, side);
-            await updateLog(currentSession.id!, editingWeightMachineId, 'repQuality', quality, side);
-            await updateLog(currentSession.id!, editingWeightMachineId, 'isStaticHold', isHold, side);
-            if (isHold) {
-              await updateLog(currentSession.id!, editingWeightMachineId, 'seconds', repsOrSeconds, side);
-              await updateLog(currentSession.id!, editingWeightMachineId, 'reps', '0', side);
-            } else {
-              await updateLog(currentSession.id!, editingWeightMachineId, 'reps', repsOrSeconds, side,);
-              await updateLog(currentSession.id!, editingWeightMachineId, 'seconds', '0', side);
-            }
-            
-            setEditingWeightMachineId(null);
-            setEditingWeightSide(undefined);
-            
-            // Advance UI to the next machine automatically after a brief delay
-            // If it's Torso Rotation and we just finished Left, maybe advance to Right?
-            if (side === 'Left') {
-              setTimeout(() => {
-                setEditingWeightMachineId(editingWeightMachineId);
-                setEditingWeightSide('Right');
-              }, 150);
-              return;
-            }
+        const currentWeight = (isTorso ? (logL?.weight || logR?.weight || '0') : (logL?.weight || '0'));
+        const currentNextWeight = logL?.targetWeight || '';
+        const currentRepsLeft = logL?.isStaticHold ? (logL.seconds || '0') : (logL?.reps || '0');
+        const currentRepsRightStr = logR?.isStaticHold ? (logR.seconds || '0') : (logR?.reps || '0');
 
-            const currentIndex = activeMachineIds.indexOf(editingWeightMachineId);
-            if (currentIndex !== -1 && currentIndex < activeMachineIds.length - 1) {
-              setTimeout(() => {
-                const nextMachineId = activeMachineIds[currentIndex + 1];
-                const nextMachine = machines.find(m => m.id === nextMachineId);
-                setEditingWeightMachineId(nextMachineId);
-                if (nextMachine?.name.toLowerCase().includes('torso rotation')) {
-                  setEditingWeightSide('Left');
+        return (
+          <PerformanceEntryDialog 
+            machine={theMachine}
+            side={sideToUse}
+            isTorsoFull={isTorso}
+            machineSettings={clientMachineSettings[editingWeightMachineId]}
+            currentWeight={currentWeight}
+            currentNextWeight={currentNextWeight}
+            currentReps={currentRepsLeft}
+            currentRepsRight={isTorso ? currentRepsRightStr : undefined}
+            currentQuality={logL?.repQuality || 0}
+            pastMachineLogs={sessions
+              .filter(s => currentSession ? s.id !== currentSession.id : true)
+              .map(s => {
+                const log = logs[`${s.id}_${editingWeightMachineId}${isTorso ? '_Left' : (sideToUse ? '_' + sideToUse : '')}`] || logs[`${s.id}_${editingWeightMachineId}`];
+                return log && log.weight ? { log, session: s } : null;
+              })
+              .filter((x): x is { log: ExerciseLog; session: WorkoutSession } => Boolean(x))
+              .slice(0, 3)}
+            isStaticHold={logL?.isStaticHold}
+            onClose={() => {
+              setEditingWeightMachineId(null);
+              setEditingWeightSide(undefined);
+            }}
+            onSave={async (weight, target, repsOrSeconds, quality, isHold, side, repsRightStr) => {
+              const timeDiff = Math.floor((Date.now() - lastMachineLoggedAt.current) / 1000);
+
+              if (isTorso) {
+                // Save Left Side
+                await updateLog(currentSession.id!, editingWeightMachineId, 'weight', weight, 'Left');
+                await updateLog(currentSession.id!, editingWeightMachineId, 'targetWeight', target, 'Left');
+                await updateLog(currentSession.id!, editingWeightMachineId, 'repQuality', quality, 'Left');
+                await updateLog(currentSession.id!, editingWeightMachineId, 'isStaticHold', isHold, 'Left');
+                if (isHold) {
+                  await updateLog(currentSession.id!, editingWeightMachineId, 'seconds', repsOrSeconds, 'Left');
+                  await updateLog(currentSession.id!, editingWeightMachineId, 'reps', '0', 'Left');
                 } else {
-                  setEditingWeightSide(undefined);
+                  await updateLog(currentSession.id!, editingWeightMachineId, 'reps', repsOrSeconds, 'Left');
+                  await updateLog(currentSession.id!, editingWeightMachineId, 'seconds', '0', 'Left');
                 }
-              }, 150);
-            }
-          }}
-        />
-      )}
+                
+                // Save Right Side (using the same weight and quality, but its own reps)
+                await updateLog(currentSession.id!, editingWeightMachineId, 'weight', weight, 'Right');
+                await updateLog(currentSession.id!, editingWeightMachineId, 'targetWeight', target, 'Right');
+                await updateLog(currentSession.id!, editingWeightMachineId, 'repQuality', quality, 'Right');
+                await updateLog(currentSession.id!, editingWeightMachineId, 'isStaticHold', isHold, 'Right');
+                if (isHold) {
+                  await updateLog(currentSession.id!, editingWeightMachineId, 'seconds', repsRightStr || '0', 'Right');
+                  await updateLog(currentSession.id!, editingWeightMachineId, 'reps', '0', 'Right');
+                } else {
+                  await updateLog(currentSession.id!, editingWeightMachineId, 'reps', repsRightStr || '0', 'Right');
+                  await updateLog(currentSession.id!, editingWeightMachineId, 'seconds', '0', 'Right');
+                }
+                
+              } else {
+                await updateLog(currentSession.id!, editingWeightMachineId, 'weight', weight, side);
+                await updateLog(currentSession.id!, editingWeightMachineId, 'targetWeight', target, side);
+                await updateLog(currentSession.id!, editingWeightMachineId, 'repQuality', quality, side);
+                await updateLog(currentSession.id!, editingWeightMachineId, 'isStaticHold', isHold, side);
+                if (isHold) {
+                  await updateLog(currentSession.id!, editingWeightMachineId, 'seconds', repsOrSeconds, side);
+                  await updateLog(currentSession.id!, editingWeightMachineId, 'reps', '0', side);
+                } else {
+                  await updateLog(currentSession.id!, editingWeightMachineId, 'reps', repsOrSeconds, side);
+                  await updateLog(currentSession.id!, editingWeightMachineId, 'seconds', '0', side);
+                }
+              }
+              
+              setEditingWeightMachineId(null);
+              setEditingWeightSide(undefined);
+              
+              // Advance UI to the next machine automatically after a brief delay
+              const currentIndex = activeMachineIds.indexOf(editingWeightMachineId);
+              if (currentIndex !== -1 && currentIndex < activeMachineIds.length - 1) {
+                setTimeout(() => {
+                  const nextMachineId = activeMachineIds[currentIndex + 1];
+                  setEditingWeightMachineId(nextMachineId);
+                  setEditingWeightSide(undefined);
+                }, 150);
+              }
+            }}
+          />
+        );
+      })()}
 
       {/* Machine Settings Dialog */}
       {editingSettingsMachineId && (
