@@ -19,7 +19,7 @@ import {
   Plus
 } from 'lucide-react';
 import { Client, Machine, Trainer, WorkoutSession, ExerciseLog } from '../types';
-import { processLegacyChart } from '../services/geminiService';
+import { processLegacyChart, extractMachineSettingsFromImage, OCRMachineSetting } from '../services/geminiService';
 import { db } from '../firebase';
 import { collection, writeBatch, doc, serverTimestamp, getDocs, query, where, increment } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
@@ -99,8 +99,10 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
   const [expectedSessions, setExpectedSessions] = useState<number>(10);
   const [files, setFiles] = useState<{ name: string; base64: string; mimeType: string; previewUrl: string }[]>([]);
   const [isScanning, setIsScanning] = useState(false);
+  const [isScanningSettings, setIsScanningSettings] = useState(false);
   const [scanProgress, setScanProgress] = useState('');
   const [validationSessions, setValidationSessions] = useState<ValidationSession[]>([]);
+  const [extractedSettings, setExtractedSettings] = useState<OCRMachineSetting[]>([]);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -223,6 +225,25 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
     }
   };
 
+  const runSettingsOCR = async () => {
+    if (!selectedClientId || files.length === 0) return;
+
+    setIsScanningSettings(true);
+    setScanProgress('Scanning Settings Column...');
+    
+    try {
+      const imageFiles = files.map(f => ({ base64: f.base64, mimeType: f.mimeType }));
+      const settings = await extractMachineSettingsFromImage(imageFiles);
+      setExtractedSettings(settings);
+      setScanProgress('Settings Extraction Complete');
+    } catch (err) {
+      console.error(err);
+      setScanProgress('Settings Extraction Failed');
+    } finally {
+      setIsScanningSettings(false);
+    }
+  };
+
   const updateLogData = (sessionId: string, logId: string, field: string, value: any) => {
     setValidationSessions(prev => prev.map(s => {
       if (s.id !== sessionId) return s;
@@ -330,7 +351,36 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
         updatedAt: serverTimestamp()
       });
 
-      await batch.commit();
+        await batch.commit();
+
+      // 3. Save Global Machine Settings if extracted
+      if (extractedSettings.length > 0) {
+        const settingsBatch = writeBatch(db);
+        const trainer = trainers.find(t => t.id === 'legacy-trainer') || trainers[0];
+        
+        for (const setting of extractedSettings) {
+          const settingId = `${selectedClientId}_${setting.machineId}`;
+          const settingRef = doc(db, 'clientMachineSettings', settingId);
+          
+          const finalSettings: Record<string, string> = {};
+          if (setting.seat) finalSettings['Seat'] = setting.seat;
+          if (setting.gap) finalSettings['Gap'] = setting.gap;
+          if (setting.backPad) finalSettings['Back Pad'] = setting.backPad;
+          if (setting.handles) finalSettings['Handles'] = setting.handles;
+          if (setting.armPad) finalSettings['Arm Pad'] = setting.armPad;
+
+          settingsBatch.set(settingRef, {
+            clientId: selectedClientId,
+            machineId: setting.machineId,
+            settings: finalSettings,
+            updatedBy: trainer?.initials || 'OCR',
+            updatedAt: serverTimestamp(),
+            notes: 'Extracted from legacy chart'
+          }, { merge: true });
+        }
+        await settingsBatch.commit();
+      }
+
       if (onComplete) onComplete();
     } catch (err) {
       console.error(err);
@@ -465,18 +515,36 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
                       ))}
                     </div>
                     
-                    <Button 
-                      variant="outline"
-                      className={cn(
-                        "w-full border-slate-700 text-white font-black h-12 mt-4 tracking-widest uppercase text-xs transition-all",
-                        expectedSessions > 0 && selectedClientId ? "bg-[#0A2E46] hover:bg-[#F06C22] hover:text-white" : "bg-slate-900/50 opacity-50 cursor-not-allowed"
-                      )}
-                      onClick={runOCR}
-                      disabled={isScanning || !selectedClientId || expectedSessions <= 0}
-                    >
-                      <Scan className={cn("w-4 h-4 mr-2", isScanning && "animate-spin")} />
-                      {isScanning ? 'SCANNING GRID...' : 'START CLINICAL EXTRACTION'}
-                    </Button>
+                    <div className="space-y-3 mt-6">
+                      <Button 
+                        className={cn(
+                          "w-full text-white font-black h-14 tracking-widest uppercase text-xs transition-all shadow-xl shadow-[#F06C22]/10",
+                          expectedSessions > 0 && selectedClientId ? "bg-[#F06C22] hover:bg-[#D95B16] border-none" : "bg-slate-800 border-slate-700 opacity-50 cursor-not-allowed"
+                        )}
+                        onClick={runOCR}
+                        disabled={isScanning || !selectedClientId || expectedSessions <= 0}
+                      >
+                        <Scan className={cn("w-4 h-4 mr-2", isScanning && "animate-spin")} />
+                        {isScanning ? 'SCANNING GRID...' : 'FULL CLINICAL EXTRACTION'}
+                      </Button>
+
+                      <div className="relative py-2 flex items-center">
+                        <div className="flex-grow border-t border-slate-800"></div>
+                        <span className="flex-shrink mx-4 text-[8px] font-black uppercase text-slate-600 tracking-widest">OR</span>
+                        <div className="flex-grow border-t border-slate-800"></div>
+                      </div>
+
+                      <Button 
+                        variant="ghost"
+                        className="w-full border border-slate-800 text-slate-400 font-bold h-12 tracking-widest uppercase text-[10px] hover:bg-slate-800 hover:text-white transition-all shadow-inner"
+                        onClick={runSettingsOCR}
+                        disabled={isScanningSettings || !selectedClientId || files.length === 0}
+                      >
+                        <Plus className={cn("w-3 h-3 mr-2", isScanningSettings && "animate-spin")} />
+                        {isScanningSettings ? 'EXTRACTING...' : 'Import Machine Settings Only'}
+                      </Button>
+                      <p className="text-[7px] font-bold text-slate-600 uppercase text-center tracking-tighter">Use this to only import seat/pad setup without sessions</p>
+                    </div>
                   </div>
               )}
             </CardContent>
@@ -571,6 +639,36 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
                       <Badge variant="outline" className="border-[#F06C22] text-[#F06C22] font-black uppercase text-[8px] px-3">
                         CONTINUITY VERIFIED
                       </Badge>
+                    </div>
+
+                    {/* Extraction Frequency Panel */}
+                    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 mb-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Historical Machine Settings</h3>
+                        {extractedSettings.length > 0 && (
+                          <Badge className="bg-[#F06C22] text-white text-[8px] font-black">
+                            {extractedSettings.length} MACHINES FOUND
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      {extractedSettings.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                          {extractedSettings.map((s, idx) => (
+                            <div key={idx} className="bg-slate-800/50 border border-slate-700 rounded-lg p-2 flex flex-col gap-1">
+                              <p className="text-[9px] font-black text-[#F06C22] truncate uppercase">{s.machineId.replace(/_/g, ' ')}</p>
+                              <div className="flex flex-wrap gap-1">
+                                {s.seat && <span className="text-[7px] bg-slate-900 px-1 rounded text-slate-400">S:{s.seat}</span>}
+                                {s.gap && <span className="text-[7px] bg-slate-900 px-1 rounded text-slate-400">G:{s.gap}</span>}
+                                {s.backPad && <span className="text-[7px] bg-slate-900 px-1 rounded text-slate-400">B:{s.backPad}</span>}
+                                {s.handles && <span className="text-[7px] bg-slate-900 px-1 rounded text-slate-400">H:{s.handles}</span>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[9px] text-slate-600 italic">No global settings extracted yet. Use the "Extract Machine Settings Only" button.</p>
+                      )}
                     </div>
 
                     {/* Extraction Frequency Panel */}

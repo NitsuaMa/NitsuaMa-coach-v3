@@ -319,10 +319,44 @@ export interface ExtractedPerformance {
   isStaticHold?: boolean;
 }
 
+export interface OCRMachineSetting {
+  machineId: string;
+  seat?: string;
+  gap?: string;
+  backPad?: string;
+  handles?: string;
+  armPad?: string;
+}
+
 export interface OCRResult {
   sessionHeaders: ExtractedSessionHeader[];
   performances: ExtractedPerformance[];
 }
+
+export const MACHINE_SETTINGS_OCR_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    settings: {
+      type: "array" as const,
+      items: {
+        type: "object" as const,
+        properties: {
+          machineId: { 
+            type: "string" as const,
+            description: "The official machine ID from the provided dictionary."
+          },
+          seat: { type: "string" as const },
+          gap: { type: "string" as const },
+          backPad: { type: "string" as const },
+          handles: { type: "string" as const },
+          armPad: { type: "string" as const }
+        },
+        required: ["machineId"]
+      }
+    }
+  },
+  required: ["settings"]
+};
 
 export const CHART_OCR_SCHEMA = {
   type: "object" as const,
@@ -357,6 +391,90 @@ export const CHART_OCR_SCHEMA = {
   },
   required: ["sessionHeaders", "performances"]
 };
+
+export async function extractMachineSettingsFromImage(
+  images: { base64: string; mimeType: string }[]
+): Promise<OCRMachineSetting[]> {
+  const ai = getGenaiClient();
+  
+  const machineDictionary = {
+    "LP": "leg_press",
+    "LE": "leg_extension",
+    "LC": "leg_curl",
+    "ABD": "abduction",
+    "ADD": "adduction",
+    "CP": "chest_press",
+    "OP": "overhead_press",
+    "SD": "seated_dip",
+    "CF": "chest_flye",
+    "TE": "triceps_extension",
+    "LR": "lateral_raise",
+    "CR": "compound_row",
+    "PD": "pulldown",
+    "PO": "pullover",
+    "SR": "simple_row",
+    "BC": "biceps_curl",
+    "LE/L": "lumbar_extension",
+    "AB": "abdominals",
+    "TR": "torso_rotation",
+    "CE": "cervical_extension"
+  };
+
+  const systemInstruction = `You are an expert at decoding messy, handwritten clinical workout charts. Your specific task is to extract historical MACHINE SETTINGS from Column 2 of the provided chart.
+
+**CONTEXT & VISUAL LAYOUT:**
+1. **Column 1 (Far Left):** Contains the Machine Name or Abbreviation (e.g., "LP", "Chest Press").
+2. **Column 2 (Immediately Right):** Contains the "Settings" box. This is a messy string of symbols, letters, and numbers (e.g., "S4 G2", "S-4, B-P2", "W, S5", "H: M").
+
+**MACHINE ID DICTIONARY:**
+Map abbreviations to these official IDs:
+${JSON.stringify(machineDictionary, null, 2)}
+
+**EXTRACTION HEURISTICS (The Decoder):**
+- **Seat Height:** Look for "S", "St", or "Seat" followed by a number (e.g., "S4" -> seat: "4").
+- **Gap:** Look for "G", "Gp", or "Gap" followed by a number (e.g., "G2" -> gap: "2").
+- **Back Pad:** Look for "B", "Bk", "Back", or protocol positions like "P2", "P3" (e.g., "B: P2" -> backPad: "P2").
+- **Handles/Arm Pads (Width):** Look for "H", "W", "M", "N" indicating Wide, Middle, or Narrow setups (e.g., "H: M" -> handles: "M").
+
+**STRICT RULES:**
+- Ignore weight and rep data. ONLY focus on the static machine settings.
+- If a machine is listed multiple times, return it only once with its most recent/complete settings.
+- If a field is not found, omit it from the object.
+- Return ONLY valid JSON matching the requested schema.`;
+
+  const imageParts = images.map(img => ({
+    inlineData: { data: img.base64, mimeType: img.mimeType }
+  }));
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: [
+      {
+        parts: [
+          ...imageParts,
+          { text: `Analyze the charts and extract all machine settings found in the second column.` }
+        ]
+      }
+    ],
+    config: {
+      systemInstruction,
+      responseMimeType: "application/json",
+      responseSchema: MACHINE_SETTINGS_OCR_SCHEMA
+    }
+  });
+
+  if (!response.text) {
+    throw new Error("No data returned from settings extraction.");
+  }
+
+  try {
+    const parsed = JSON.parse(response.text);
+    return parsed.settings as OCRMachineSetting[];
+  } catch (e) {
+    console.error("Settings Parse Error:", response.text);
+    throw new Error("Failed to parse extracted settings.");
+  }
+}
 
 export async function processLegacyChart(
   images: { base64: string; mimeType: string }[],

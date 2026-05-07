@@ -244,6 +244,8 @@ export interface ProgressReport {
   clientId: string;
   trainerId: string;
   trainerName: string;
+  trainerInitials?: string;
+  sessionNumber?: number;
   date: string;
   isManual?: boolean;
   status: 'Draft' | 'Finalized';

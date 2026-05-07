@@ -1422,15 +1422,6 @@ export function ClientProfileView({
         </TabsContent>
 
         <TabsContent value="history" className="h-[750px] relative">
-          <div className="absolute top-0 right-0 z-10 p-4">
-            <Button
-              onClick={() => setView("chart-importer" as any)}
-              className="bg-slate-900 hover:bg-slate-800 text-[#F06C22] border border-[#F06C22]/30 font-black h-8 px-4 text-[9px] uppercase tracking-widest shadow-lg"
-            >
-              <Scan className="w-3 h-3 mr-2" />
-              Bulk Import (OCR)
-            </Button>
-          </div>
           {clientId && (
             <ClientHistoryCalendar
               clientId={clientId}
@@ -1504,25 +1495,12 @@ export function ClientProfileView({
                               </Badge>
                             </div>
                             <div className="flex items-center gap-4 mt-1">
-                              <span className="text-[9px] text-muted-foreground font-bold uppercase">
-                                Trainer: {report.trainerName || "Team"}
+                              <span className="text-[9px] text-muted-foreground font-black uppercase tracking-widest bg-muted px-2 py-0.5 rounded">
+                                Session #{report.sessionNumber || Math.round(report.attendance?.totalSessions) || "---"}
                               </span>
-                              <span className="text-[9px] text-muted-foreground font-bold uppercase">
-                                Matrix Avg:{" "}
-                                {report.performanceMatrix
-                                  ? Math.round(
-                                      ((report.performanceMatrix.posture
-                                        ?.score || 0) +
-                                        (report.performanceMatrix.pace?.score ||
-                                          0) +
-                                        (report.performanceMatrix.path?.score ||
-                                          0) +
-                                        (report.performanceMatrix.purpose
-                                          ?.score || 0)) /
-                                        4,
-                                    )
-                                  : 0}
-                                %
+                              <span className="text-[9px] text-muted-foreground font-bold uppercase flex items-center gap-1">
+                                <User className="w-2.5 h-2.5" />
+                                {report.trainerName || report.trainerInitials || "Team"}
                               </span>
                             </div>
                           </div>
@@ -2499,6 +2477,39 @@ export function ClientProfileView({
             </div>
 
             <div className="space-y-6">
+              <Card className="rounded-[40px] shadow-xl bg-[#0A2E46] border-[#115E8D]/30 text-white overflow-hidden">
+                <CardHeader className="p-8 border-b border-white/5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center">
+                      <Scan className="w-5 h-5 text-[#38BDF8]" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl font-black uppercase italic tracking-tighter">
+                        Data & Migration
+                      </CardTitle>
+                      <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+                        Legacy Chart Operations
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-8 space-y-4">
+                  <p className="text-[10px] text-white/60 font-medium leading-relaxed">
+                    Migrate historical data from messy FileMaker charts or handwritten logs using our high-precision OCR pipeline.
+                  </p>
+                  <Button
+                    onClick={() => setView("chart-importer" as any)}
+                    className="w-full h-14 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/10 text-[#38BDF8] font-black uppercase italic tracking-widest text-[11px] transition-all"
+                  >
+                    <Scan className="w-4 h-4 mr-2" />
+                    Open Bulk Import Hub
+                  </Button>
+                  <p className="text-[8px] font-bold text-white/30 uppercase text-center mt-2">
+                    Supports Batch Multi-Process OCR
+                  </p>
+                </CardContent>
+              </Card>
+
               <Card className="rounded-[40px] shadow-sm bg-slate-900 border-slate-800 text-white">
                 <CardHeader className="p-8">
                   <h3 className="text-xs font-black uppercase tracking-[0.3em] opacity-40">

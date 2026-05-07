@@ -457,6 +457,8 @@ export function ClientProgressReportView({
 
       const sanitizedReport = removeUndefined({
         ...report,
+        sessionNumber: report.sessionNumber || client.sessionCount || 0,
+        trainerInitials: trainer.initials,
         status,
         updatedAt: serverTimestamp(),
       });
@@ -1176,9 +1178,19 @@ export function ClientProgressReportView({
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-[#68717A]">
-                      Timeframe Start Date (Blank = All Time)
-                    </Label>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-[#68717A]">
+                        Timeframe Start Date (Blank = All Time)
+                      </Label>
+                      {report.attendance.firstSessionDate && (
+                        <button 
+                          onClick={() => handleRecalculateAttendance(report.attendance.firstSessionDate!)}
+                          className="text-[9px] font-black text-primary uppercase hover:underline"
+                        >
+                          Use First Session: {new Date(report.attendance.firstSessionDate).toLocaleDateString()}
+                        </button>
+                      )}
+                    </div>
                     <Input
                       type="date"
                       value={report.attendance.customStartDate || ""}
