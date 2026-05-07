@@ -3763,18 +3763,27 @@ function ClientHistoryView({
                 >
                   Exercise
                 </th>
-                {displaySessions.map((s) => (
-                  <th 
-                    key={s.id} 
-                    className={`p-1.5 text-center border-b border-r min-w-[70px] w-[70px] transition-all bg-muted/50 backdrop-blur-sm ${s.id === selectedSessionId ? 'bg-primary/10 ring-1 ring-inset ring-primary' : ''}`}
-                  >
-                    <div className="flex flex-col items-center">
-                      <span className="text-[11px] font-black leading-tight italic tracking-tighter">#{s.sessionNumber}</span>
-                      <span className="text-[7px] text-muted-foreground font-black uppercase tracking-widest">{s.date.split('-').slice(1).join('/')}</span>
-                      <span className="text-[8px] font-black text-primary/70">{s.trainerInitials}</span>
-                    </div>
-                  </th>
-                ))}
+                {displaySessions.map((s) => {
+                  const absoluteIdx = filteredSessions.findIndex(fs => fs.id === s.id);
+                  const sNum = s.sessionNumber || (absoluteIdx + 1);
+                  return (
+                    <th 
+                      key={s.id} 
+                      className={`p-1.5 text-center border-b border-r min-w-[70px] w-[70px] transition-all bg-muted/50 backdrop-blur-sm ${s.id === selectedSessionId ? 'bg-primary/10 ring-1 ring-inset ring-primary' : ''}`}
+                    >
+                      <div className="flex flex-col items-center space-y-1">
+                        <div className="bg-primary/10 border border-primary/20 rounded-md px-1.5 py-0.5 shadow-sm">
+                          <span className="text-primary font-black tabular-nums text-[10px] leading-none">
+                            {sNum.toString().padStart(2, '0')}
+                          </span>
+                        </div>
+                        <span className="text-[7px] text-muted-foreground font-black uppercase tracking-widest">
+                          {new Date(parseSessionDate(s.date)).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })}
+                        </span>
+                      </div>
+                    </th>
+                  );
+                })}
                 <th className="p-1 text-center font-black uppercase text-[8px] border-b bg-muted/50 sticky right-0 z-20 min-w-[50px] w-[50px]">+/-</th>
               </tr>
             </thead>

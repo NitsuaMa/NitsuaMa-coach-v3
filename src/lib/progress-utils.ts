@@ -198,11 +198,14 @@ export async function calculateComprehensiveAttendanceStats(clientId: string, st
     }
   });
 
+  const finalVolume = Math.round(totalVolume);
+  const finalReps = Math.round(totalRepsRaw);
+
   return {
     totalSessions,
     firstSessionDate,
-    totalVolume: Math.round(totalVolume),
-    totalReps: Math.round(totalRepsRaw),
+    totalVolume: isNaN(finalVolume) ? 0 : finalVolume,
+    totalReps: isNaN(finalReps) ? 0 : finalReps,
     totalGoodReps,
     avgRestDays,
     avgDuration,
@@ -254,6 +257,7 @@ export async function calculateDynamicHighlightMetrics(clientId: string, machine
   if (startW > 0) {
     percentageIncrease = Math.round(((currentW - startW) / startW) * 100);
   }
+  if (isNaN(percentageIncrease)) percentageIncrease = 0;
 
   let totalVolume = 0;
   let perfectSets = 0;
@@ -261,9 +265,9 @@ export async function calculateDynamicHighlightMetrics(clientId: string, machine
 
   validLogs.forEach(l => {
     const w = parseFloat(l.weight || '0') || 0;
+    const sVal = parseFloat(l.seconds || '0') || 0;
     if (l.isStaticHold || l.isTSC) {
-      const s = parseFloat(l.seconds || '0') || 0;
-      totalVolume += w * ((s / 30) * 2);
+      totalVolume += w * ((sVal / 30) * 2);
     } else {
       const r = parseFloat(l.reps || '0') || 1;
       totalVolume += w * r;
@@ -273,15 +277,17 @@ export async function calculateDynamicHighlightMetrics(clientId: string, machine
       perfectSets++;
     }
     
-    timeUnderTension += parseFloat(l.seconds || '0') || 0;
+    timeUnderTension += sVal;
   });
+
+  const finalVolume = Math.round(totalVolume);
 
   return {
     startWeight: startW,
     currentWeight: currentW,
     percentageIncrease,
-    totalVolume: Math.round(totalVolume),
+    totalVolume: isNaN(finalVolume) ? 0 : finalVolume,
     perfectSets,
-    timeUnderTension
+    timeUnderTension: isNaN(timeUnderTension) ? 0 : timeUnderTension
   };
 }

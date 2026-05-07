@@ -525,27 +525,25 @@ export function ClientProfileView({
     if (!clientId || hasQuotaError || !user) return;
     if (activeTab !== "reports") return;
 
-    const fetchReports = async () => {
-      try {
-        const q = query(
-          collection(db, "progressReports"),
-          where("clientId", "==", clientId),
-          orderBy("createdAt", "desc"),
-          limit(50),
-        );
-        const snap = await getDocs(q);
-        setProgressReports(
-          snap.docs.map(
-            (doc) => ({ id: doc.id, ...doc.data() }) as ProgressReport,
-          ),
-        );
-      } catch (error) {
-        handleFirestoreError(error, OperationType.GET, "progressReports");
-      }
-    };
+    const q = query(
+      collection(db, "progressReports"),
+      where("clientId", "==", clientId),
+      orderBy("createdAt", "desc"),
+      limit(50),
+    );
+    
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setProgressReports(
+        snap.docs.map(
+          (doc) => ({ id: doc.id, ...doc.data() }) as ProgressReport,
+        ),
+      );
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, "progressReports");
+    });
 
-    fetchReports();
-  }, [clientId]);
+    return () => unsubscribe();
+  }, [clientId, activeTab, user]);
 
   useEffect(() => {
     if (!clientId || !user) return;
@@ -1042,19 +1040,30 @@ export function ClientProfileView({
                   {sessions
                     .slice(0, 6)
                     .reverse()
-                    .map((s) => {
-                      const timestamp = parseSessionDate(s.date);
+                    .map((s, sIdx) => {
+                      const totalSessions = sessions.length;
+                      const displaySessions = sessions.slice(0, 6).reverse();
+                      // We need to calculate the actual session number based on its position in the full sessions array
+                      const sNum = s.sessionNumber || (totalSessions - (displaySessions.length - 1 - sIdx));
+                      
                       return (
                         <th
                           key={s.id}
                           className="p-1.5 text-center border-r border-[#115E8D]/20 truncate w-[10%] opacity-90"
                         >
-                          {timestamp > 0
-                            ? new Date(timestamp).toLocaleDateString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                              })
-                            : "--"}
+                          <div className="flex flex-col items-center space-y-0.5">
+                            <div className="bg-white/10 border border-white/20 rounded px-1 py-0 shadow-sm">
+                              <span className="text-white font-black tabular-nums text-[9px] leading-none">
+                                {sNum.toString().padStart(2, '0')}
+                              </span>
+                            </div>
+                            <span className="text-[7px] text-white/70 font-bold uppercase tracking-tighter">
+                              {s.date ? new Date(parseSessionDate(s.date)).toLocaleDateString("en-US", {
+                                month: "2-digit",
+                                day: "2-digit",
+                              }) : "--"}
+                            </span>
+                          </div>
                         </th>
                       );
                     })}

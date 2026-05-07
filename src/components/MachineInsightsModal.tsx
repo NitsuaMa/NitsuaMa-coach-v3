@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Activity, TrendingUp, Save, Clock, Dumbbell, AlertCircle, History, Wand2, LineChart as LineChartIcon, Zap } from 'lucide-react';
+import { Activity, TrendingUp, Save, Clock, Dumbbell, AlertCircle, History, Wand2, LineChart as LineChartIcon, Zap, MessageSquare } from 'lucide-react';
 import { collection, query, where, onSnapshot, doc, getDoc, updateDoc, setDoc, orderBy, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Machine, Client, ExerciseLog, ClientMachineSetting, MachineNote } from '../types';
@@ -76,13 +76,8 @@ export function MachineInsightsModal({ client, machine, onClose }: Props) {
     
     const unsubLogs = onSnapshot(qLogs, (snap) => {
       const fetchedLogs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExerciseLog));
-      // Filter out empty data (where both reps and staticHoldTime/seconds are 0 or undefined)
       // Strictly enforce machineId isolation to prevent data bleeding
-      const validLogs = fetchedLogs.filter(l => {
-        const reps = parseInt(l.reps || '0');
-        const hold = parseInt(l.seconds || '0');
-        return l.machineId === machine.id && (reps > 0 || hold > 0);
-      });
+      const validLogs = fetchedLogs.filter(l => l.machineId === machine.id);
       validLogs.sort((a, b) => {
         const timeA = a.createdAt?.toMillis?.() || 0;
         const timeB = b.createdAt?.toMillis?.() || 0;
@@ -147,7 +142,7 @@ export function MachineInsightsModal({ client, machine, onClose }: Props) {
   };
 
   const chartData = logs
-    .filter(l => l.repQuality !== undefined && l.repQuality !== null)
+    .filter(l => l.repQuality !== undefined && l.repQuality !== null && (parseInt(l.reps || '0') > 0 || parseInt(l.seconds || '0') > 0))
     .slice(-10) // show up to last 10
     .map((l, i) => {
       return {
@@ -301,68 +296,74 @@ export function MachineInsightsModal({ client, machine, onClose }: Props) {
                </div>
 
                {/* Recent Session History Grid */}
-               <Card className="rounded-2xl border border-white/10 bg-[#0e171e] shadow-lg overflow-hidden">
-                 <CardContent className="p-0 overflow-x-auto">
-                   <table className="w-full text-left border-collapse min-w-[500px]">
-                     <thead className="bg-[#0A2E46]">
-                       <tr>
-                         {logs.map((log, idx) => (
-                           <th key={log.id} className="p-3 text-center border-b border-r border-white/5 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                             S{idx + 1}
-                           </th>
-                         ))}
-                         {logs.length > 0 && (
-                           <th className="p-3 text-center border-b border-white/5 bg-[#115E8D]/30 text-[10px] font-black uppercase text-[#38BDF8] tracking-widest whitespace-nowrap">
-                             Next Target
-                           </th>
-                         )}
-                       </tr>
-                     </thead>
-                     <tbody>
-                       <tr>
-                         {logs.map((log) => {
-                           let qualityColor = 'text-slate-400';
-                           if (log.repQuality === 3) qualityColor = 'text-emerald-400';
-                           else if (log.repQuality === 2) qualityColor = 'text-amber-400';
-                           else if (log.repQuality === 1) qualityColor = 'text-red-400';
+               <div className="flex flex-col space-y-2 overflow-y-auto max-h-[400px] custom-scrollbar pr-2">
+                 {[...logs].reverse().map((log, idx) => {
+                   const repsRaw = parseInt(log.reps || '0');
+                   const secondsRaw = parseInt(log.seconds || '0');
+                   const isSkipped = repsRaw === 0 && secondsRaw === 0;
+                   const logDate = log.createdAt?.toMillis ? new Date(log.createdAt.toMillis()) : new Date();
 
-                           return (
-                             <td key={log.id} className="p-4 border-r border-white/5 text-center align-middle">
-                               <div className="flex flex-col items-center justify-center">
-                                 <div className="flex items-center gap-0.5 mb-1">
-                                   <span className="font-black text-lg text-white">{log.weight}</span>
-                                 </div>
-                                 <span className={`font-extrabold text-sm ${qualityColor}`}>
-                                   {log.repsLeft !== undefined && log.repsRight !== undefined ? (
-                                      `${log.repsLeft}L|${log.repsRight}R`
-                                    ) : (
-                                      log.isStaticHold ? `${log.seconds}s` : log.reps
-                                    )}
-                                 </span>
-                               </div>
-                             </td>
-                           );
-                         })}
-                         {logs.length > 0 && (() => {
-                           const targetLog = logs[logs.length - 1];
-                           const currentWeightNum = Number(targetLog.weight || 0);
-                            const targetWeight = targetLog.repQuality === 3 ? (isNaN(currentWeightNum) ? 0 : currentWeightNum + 5) : targetLog.weight;
-                           return (
-                             <td className="p-4 text-center bg-[#115E8D]/10 align-middle">
-                               <div className="flex flex-col items-center">
-                                 <span className="font-black text-xl text-[#38BDF8]">
-                                   {isNaN(targetWeight as any) ? '--' : targetWeight}
-                                 </span>
-                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">LBS</span>
-                               </div>
-                             </td>
-                           );
-                         })()}
-                       </tr>
-                     </tbody>
-                   </table>
-                 </CardContent>
-               </Card>
+                   let qualityColor = 'text-slate-400 bg-slate-900/50';
+                   if (log.repQuality === 3) qualityColor = 'text-emerald-400 bg-emerald-950/30';
+                   else if (log.repQuality === 2) qualityColor = 'text-amber-400 bg-amber-950/30';
+                   else if (log.repQuality === 1) qualityColor = 'text-red-400 bg-red-950/30';
+
+                   return (
+                     <div key={log.id} className={`flex items-center justify-between bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 rounded-xl p-3 transition-colors ${isSkipped ? 'opacity-40 grayscale' : ''}`}>
+                       {/* Column 1: Date Block */}
+                       <div className="w-14 flex flex-col items-center justify-center leading-none border-r border-slate-700/50 pr-3">
+                         <span className="text-[9px] uppercase font-bold text-slate-500">
+                           {logDate.toLocaleDateString('en-US', { month: 'short' })}
+                         </span>
+                         <span className="text-lg font-black text-slate-300">
+                           {logDate.toLocaleDateString('en-US', { day: 'numeric' })}
+                         </span>
+                       </div>
+
+                       {/* Column 2: Performance Hero */}
+                       <div className="flex-1 px-4 flex items-center gap-3">
+                         {isSkipped ? (
+                           <span className="text-xs font-mono text-slate-600 tracking-widest">[ SKIPPED / 0 REPS ]</span>
+                         ) : (
+                           <>
+                             <div className="flex items-baseline">
+                               <span className="text-xl font-bold text-white tracking-tight">{log.weight}</span>
+                               <span className="text-[10px] text-slate-500 ml-1">LBS</span>
+                             </div>
+                             <div className={`px-2 py-0.5 rounded-md flex items-center justify-center min-w-[36px] ${qualityColor}`}>
+                               <span className="font-extrabold text-[11px]">
+                                 {log.repsLeft !== undefined && log.repsRight !== undefined ? (
+                                    `${log.repsLeft}L|${log.repsRight}R`
+                                 ) : (
+                                   log.isStaticHold ? `${log.seconds}s` : log.reps
+                                 )}
+                               </span>
+                             </div>
+                           </>
+                         )}
+                       </div>
+
+                       {/* Column 3: Clinical Setup */}
+                       <div className="flex shrink-0 items-center gap-1.5 flex-wrap justify-end max-w-[120px]">
+                         {settingsDetail?.settings && Object.entries(settingsDetail.settings).map(([key, val]) => (
+                           val && (
+                             <Badge key={key} variant="outline" className="bg-slate-900 border-slate-700 text-slate-400 text-[10px] px-1.5 py-0 leading-tight">
+                               {key.charAt(0).toUpperCase()}:{val}
+                             </Badge>
+                           )
+                         ))}
+                       </div>
+
+                       {/* Column 4: Trainer Notes Indicator */}
+                       {log.notes && (
+                         <div className="ml-3 border-l border-slate-700/50 pl-3 flex items-center">
+                           <MessageSquare className="w-4 h-4 text-slate-500" />
+                         </div>
+                       )}
+                     </div>
+                   );
+                 })}
+               </div>
 
                {/* Quality Trend Chart (Recharts) */}
                <Card className="rounded-2xl border border-white/10 bg-[#0e171e] shadow-lg">

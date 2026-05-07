@@ -440,20 +440,38 @@ export function ClientProgressReportView({
   const handleSave = async (status: "Draft" | "Finalized" = "Finalized") => {
     setSaving(true);
     try {
-      const sanitizedReport = {
+      // Recursively remove undefined values to prevent Firestore crashes
+      const removeUndefined = (obj: any): any => {
+        if (obj === undefined) return undefined;
+        if (obj === null) return null;
+        if (typeof obj !== 'object') return obj;
+        if (obj.serverTime || obj.isEqual) return obj; // Handle FieldValue / Timestamp
+        if (Array.isArray(obj)) return obj.map(removeUndefined).filter(v => v !== undefined);
+        const res: any = {};
+        for (const k in obj) {
+          const val = removeUndefined(obj[k]);
+          if (val !== undefined) res[k] = val;
+        }
+        return res;
+      };
+
+      const sanitizedReport = removeUndefined({
         ...report,
         status,
         updatedAt: serverTimestamp(),
-      };
+      });
+      
+      // We don't want to overwrite createdAt on updates
+      if (sanitizedReport.createdAt === null || report.id) {
+        delete sanitizedReport.createdAt;
+      }
 
       let reportId = report.id;
       if (reportId) {
         await updateDoc(doc(db, "progressReports", reportId), sanitizedReport);
       } else {
-        const docRef = await addDoc(collection(db, "progressReports"), {
-          ...sanitizedReport,
-          createdAt: serverTimestamp(),
-        });
+        sanitizedReport.createdAt = serverTimestamp();
+        const docRef = await addDoc(collection(db, "progressReports"), sanitizedReport);
         reportId = docRef.id;
         setReport((prev) => ({ ...prev, id: docRef.id }));
       }
