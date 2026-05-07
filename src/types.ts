@@ -81,8 +81,16 @@ export interface Machine {
   settingOptions?: string[]; // e.g. ["Seat", "Pads", "Backrest"]
   order: number;
   imageUrl?: string;
+  anatomicalRegion?: string;
+  kinematicClassification?: string;
   targetMuscles?: string; // Muscle group names or short desc
   primaryMuscles?: string[];
+  targetMusculature?: string[];
+  synergists?: string[];
+  setupGap?: string;
+  executionPosture?: "Chest Up / Anterior Pelvic Tilt" | "Posterior Pelvic Tilt / Contracted Abdomen" | string;
+  requiresHandoff?: boolean;
+  sequencingContraindications?: string[];
   biomechanicalNotes?: string;
   contraindicatedFor?: string[];
   modifications?: string;

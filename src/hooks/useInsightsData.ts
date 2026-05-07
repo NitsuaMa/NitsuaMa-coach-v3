@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { InsightsService } from '../services/InsightsService';
 import { DashboardAggregatedData, InsightsFilterState } from '../data/insights-logic';
-import { PhysicalStressProfile } from '../data/occupational-matrix';
+import { ActivityLevel } from '../data/occupational-matrix';
 
 /**
  * Custom hook to safely fetch and filter clinical insight data, protecting
@@ -57,13 +57,13 @@ export function useInsightsData(filters: InsightsFilterState) {
     
     // Example filtering logic: 
     // If 'all' or empty, we show everything. Otherwise, we filter the metrics by demographicCohort / occupationCategory
-    const hasStressFilters = filters.physicalStressProfiles && filters.physicalStressProfiles.length > 0;
+    const hasStressFilters = filters.activityLevels && filters.activityLevels.length > 0;
     
     // Filter Time to Trend by Stress Profile
     const filteredTimeToTrend = globalData.timeToTrend.filter(item => {
       if (!hasStressFilters) return true;
-      // Assuming demographicCohort aligns with PhysicalStressProfile values in the data dictionary
-      return filters.physicalStressProfiles.some(profile => profile === item.demographicCohort as any);
+      // Assuming demographicCohort aligns with ActivityLevel values in the data dictionary
+      return filters.activityLevels.some(activityLevel => activityLevel === item.demographicCohort as any);
     });
 
     // Filter Demographic Retention

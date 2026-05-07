@@ -134,44 +134,54 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 const DEFAULT_MACHINES: Machine[] = [
-  { id: "m-neck", name: "CX (4 way neck)", order: 1, settingOptions: ["Gap", "Back Pad", "Seat"] },
-  { id: "m-hip-add", name: "Hip Adduction", order: 2, settingOptions: ["Gap", "Back Pad"] },
-  { id: "m-hip-abd", name: "Hip Abduction", order: 3, settingOptions: ["Gap", "Back Pad", "Thigh Pads"] },
-  { id: "m-leg-curl", name: "Leg Curl", order: 4, settingOptions: ["Gap", "Back Pad", "Ankle Pad"] },
-  { id: "m-leg-ext", name: "Leg Extension", order: 5, settingOptions: ["Gap", "Back Pad"] },
-  { 
-    id: "m-leg-press", 
-    name: "Leg Press", 
-    order: 6, 
-    settingOptions: ["Gap", "Seat Angle", "Shoulder Pads", "Seat Distance"],
-    primaryMuscles: ["Quadriceps", "Gluteus Maximus"],
-    biomechanicalNotes: "Knee angle should not exceed 90 degrees at bottom turnaround to protect patellar tendon. High shear force potential on L4/L5 if posterior pelvic tilt occurs.",
-    contraindicatedFor: ["Lumbar Issues", "Knee Replacement", "Severe Patellar Tendonitis"],
-    modifications: "For Lumbar issues: Lock seat angle to P2 or P1, limit ROM to prevent pelvic tuck. For Knee issues: Reduce gap, set end-stop earlier to prevent deep flexion."
-  },
-  { id: "m-pulldown", name: "Pulldown", order: 7, settingOptions: ["Gap", "Back Pad", "Seat", "Handles"] },
-  { id: "m-chest-press", name: "Chest Press", order: 8, settingOptions: ["Gap", "Back Pad", "Seat"] },
-  { id: "m-compound-row", name: "Compound Row", order: 9, settingOptions: ["Gap", "Chest Pad", "Handles"] },
-  { id: "m-simple-row", name: "Simple Row", order: 10, settingOptions: ["Gap", "Chest Pad", "Seat Pad"] },
-  { id: "m-overhead-press", name: "Overhead Press", order: 11, settingOptions: ["Gap", "Seat"] },
-  { id: "m-pullover", name: "Seated Pullover", order: 12, settingOptions: ["Gap", "Seat", "Handles"] },
-  { id: "m-dip", name: "Seated Dip", order: 13, settingOptions: ["Gap", "Back Pad Height", "Back Pad Angle", "Seat", "Handles"] },
-  { id: "m-tricep-ext", name: "Tricep Extension", order: 14, settingOptions: ["Gap", "Seat"] },
-  { id: "m-bicep", name: "Bicep", order: 15, settingOptions: ["Gap", "Seat"] },
-  { id: "m-chest-fly", name: "Chest/Pec Fly", order: 16, settingOptions: ["Gap", "Back Pad", "Seat"] },
-  { id: "m-lateral-raise", name: "Lateral Raise", order: 17, settingOptions: ["Gap", "Seat", "Handles"] },
+  { id: "m-neck", anatomicalRegion: "Cervical Spine (Neck)", name: "CX (4 WAY NECK)", targetMuscles: "Cervical Paraspinals, Suboccipitals", kinematicClassification: "Simple / Rotary", order: 1, settingOptions: ["Gap", "Back Pad", "Seat"], executionPosture: "Chest Up / Anterior Pelvic Tilt", requiresHandoff: true },
+  { id: "m-overhead-press", anatomicalRegion: "Shoulder Girdle", name: "OVERHEAD PRESS", targetMuscles: "Anterior/Medial Deltoids, Triceps", kinematicClassification: "Compound Push", order: 2, settingOptions: ["Gap", "Seat"], executionPosture: "Posterior Pelvic Tilt / Contracted Abdomen" },
+  { id: "m-lateral-raise", anatomicalRegion: "Shoulder Girdle", name: "LATERAL RAISE", targetMuscles: "Medial Deltoids", kinematicClassification: "Simple Push", order: 3, settingOptions: ["Gap", "Seat", "Handles"], executionPosture: "Chest Up / Anterior Pelvic Tilt" },
+  { id: "m-pulldown", anatomicalRegion: "Upper/Mid Dorsal", name: "PULLDOWN", targetMuscles: "Latissimus Dorsi, Trapezius, Biceps", kinematicClassification: "Compound Pull", order: 4, settingOptions: ["Gap", "Back Pad", "Seat", "Handles"], setupGap: "Gap 2", executionPosture: "Chest Up / Anterior Pelvic Tilt", requiresHandoff: true, sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."] },
+  { id: "m-pullover", anatomicalRegion: "Upper/Mid Dorsal", name: "SEATED PULLOVER", targetMuscles: "Latissimus Dorsi", kinematicClassification: "Simple Pull", order: 5, settingOptions: ["Gap", "Seat", "Handles"], executionPosture: "Posterior Pelvic Tilt / Contracted Abdomen", requiresHandoff: true, sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."] },
+  { id: "m-compound-row", anatomicalRegion: "Upper/Mid Dorsal", name: "COMPOUND ROW", targetMuscles: "Latissimus Dorsi, Rhomboids, Trapezius", kinematicClassification: "Compound Pull", order: 6, settingOptions: ["Gap", "Chest Pad", "Handles"], executionPosture: "Chest Up / Anterior Pelvic Tilt", requiresHandoff: true, sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."] },
+  { id: "m-simple-row", anatomicalRegion: "Upper/Mid Dorsal", name: "SIMPLE ROW", targetMuscles: "Posterior Deltoids, Rhomboids", kinematicClassification: "Simple Pull", order: 7, settingOptions: ["Gap", "Chest Pad", "Seat Pad"], executionPosture: "Chest Up / Anterior Pelvic Tilt", sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."] },
+  { id: "m-chest-press", anatomicalRegion: "Anterior Thoracic (Chest)", name: "CHEST PRESS", targetMuscles: "Pectoralis Major, Anterior Deltoids", kinematicClassification: "Compound Push", order: 8, settingOptions: ["Gap", "Back Pad", "Seat"], executionPosture: "Chest Up / Anterior Pelvic Tilt" },
+  { id: "m-chest-fly", anatomicalRegion: "Anterior Thoracic (Chest)", name: "CHEST/PEC FLY", targetMuscles: "Pectoralis Major", kinematicClassification: "Simple Push", order: 9, settingOptions: ["Gap", "Back Pad", "Seat"], executionPosture: "Chest Up / Anterior Pelvic Tilt" },
+  { id: "m-bicep", anatomicalRegion: "Brachial Extremities", name: "BICEP", targetMuscles: "Biceps Brachii, Brachioradialis", kinematicClassification: "Simple Pull", order: 10, settingOptions: ["Gap", "Seat"], executionPosture: "Chest Up / Anterior Pelvic Tilt", sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."] },
+  { id: "m-tricep-ext", anatomicalRegion: "Brachial Extremities", name: "TRICEP EXTENSION", targetMuscles: "Triceps Brachii", kinematicClassification: "Simple Push", order: 11, settingOptions: ["Gap", "Seat"], executionPosture: "Posterior Pelvic Tilt / Contracted Abdomen" },
+  { id: "m-dip", anatomicalRegion: "Brachial Extremities", name: "SEATED DIP", targetMuscles: "Triceps Brachii, Lower Pectoralis", kinematicClassification: "Compound Push", order: 12, settingOptions: ["Gap", "Back Pad Height", "Back Pad Angle", "Seat", "Handles"], executionPosture: "Posterior Pelvic Tilt / Contracted Abdomen" },
+  { id: "m-abs", anatomicalRegion: "Lumbo-Pelvic Core", name: "SEATED ABDOMINALS", targetMuscles: "Rectus Abdominis", kinematicClassification: "Simple Push", order: 13, settingOptions: ["Gap", "Seat"], executionPosture: "Posterior Pelvic Tilt / Contracted Abdomen", requiresHandoff: true },
   { 
     id: "m-lumbar", 
-    name: "Lumbar", 
-    order: 18, 
+    anatomicalRegion: "Lumbo-Pelvic Core", 
+    name: "LUMBAR", 
+    targetMuscles: "Lumbar Paraspinals", 
+    kinematicClassification: "Simple Pull", 
+    order: 14, 
     settingOptions: ["Gap", "Seat"],
+    setupGap: "Gap 4-6",
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    sequencingContraindications: ["Do not pair immediately before Leg Press or Leg Curl (lumbar pump exacerbation).", "Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."],
     primaryMuscles: ["Erector Spinae"],
     biomechanicalNotes: "Ensure rotation point aligns perfectly with the iliac crest. Focuses intensely on spinal extension.",
     contraindicatedFor: ["Spinal Stenosis", "Herniated Disc (Acute)", "Spondylolisthesis"],
     modifications: "Limit strictly to pain-free ROM. Decrease weight if form breaks or anterior pelvic tilt is lost."
   },
-  { id: "m-abs", name: "Seated Abdominals", order: 19, settingOptions: ["Gap", "Seat"] },
-  { id: "m-torso-rotation", name: "Torso Rotation", order: 20, settingOptions: ["Gap", "Arms", "Seat"] },
+  { id: "m-torso-rotation", anatomicalRegion: "Lumbo-Pelvic Core", name: "TORSO ROTATION", targetMuscles: "Internal and External Obliques", kinematicClassification: "Simple Rotary", order: 15, settingOptions: ["Gap", "Arms", "Seat"], executionPosture: "Posterior Pelvic Tilt / Contracted Abdomen" },
+  { id: "m-hip-abd", anatomicalRegion: "Pelvic Girdle (Hips)", name: "HIP ABDUCTION", targetMuscles: "Gluteus Medius, Gluteus Minimus", kinematicClassification: "Simple Push", order: 16, settingOptions: ["Gap", "Back Pad", "Thigh Pads"], setupGap: "Custom Gap", executionPosture: "Chest Up / Anterior Pelvic Tilt" },
+  { id: "m-hip-add", anatomicalRegion: "Pelvic Girdle (Hips)", name: "HIP ADDUCTION", targetMuscles: "Adductor Longus, Brevis, Magnus", kinematicClassification: "Simple Pull", order: 17, settingOptions: ["Gap", "Back Pad"], setupGap: "Custom Gap", executionPosture: "Chest Up / Anterior Pelvic Tilt", sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."] },
+  { 
+    id: "m-leg-press", 
+    anatomicalRegion: "Upper Crural (Thighs)", 
+    name: "LEG PRESS", 
+    targetMuscles: "Quadriceps, Gluteus Maximus, Hamstrings", 
+    kinematicClassification: "Compound Push", 
+    order: 18, 
+    settingOptions: ["Gap", "Seat Angle", "Shoulder Pads", "Seat Distance"],
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    primaryMuscles: ["Quadriceps", "Gluteus Maximus"],
+    biomechanicalNotes: "Knee angle should not exceed 90 degrees at bottom turnaround to protect patellar tendon. High shear force potential on L4/L5 if posterior pelvic tilt occurs.",
+    contraindicatedFor: ["Lumbar Issues", "Knee Replacement", "Severe Patellar Tendonitis"],
+    modifications: "For Lumbar issues: Lock seat angle to P2 or P1, limit ROM to prevent pelvic tuck. For Knee issues: Reduce gap, set end-stop earlier to prevent deep flexion."
+  },
+  { id: "m-ext", anatomicalRegion: "Upper Crural (Thighs)", name: "LEG EXTENSION", targetMuscles: "Quadriceps Femoris", kinematicClassification: "Simple Push", order: 19, settingOptions: ["Gap", "Back Pad"], setupGap: "Gap 2", executionPosture: "Chest Up / Anterior Pelvic Tilt" },
+  { id: "m-leg-curl", anatomicalRegion: "Upper Crural (Thighs)", name: "LEG CURL", targetMuscles: "Hamstrings, Gastrocnemius", kinematicClassification: "Simple Pull", order: 20, settingOptions: ["Gap", "Back Pad", "Ankle Pad"], setupGap: "Gap 2", executionPosture: "Chest Up / Anterior Pelvic Tilt", sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."] },
 ];
 
 type RoutineType = 'A' | 'B' | 'Free';
@@ -4820,6 +4830,45 @@ function WorkoutTrackerView({
   const [machineTimeElapsed, setMachineTimeElapsed] = useState<number>(0);
 
   useEffect(() => {
+    if (!currentSession) return;
+    let didUpdate = false;
+    
+    // Check all logs for the current session to see if any are "completed" but lack timeSpent
+    activeMachineIds.forEach((mId) => {
+      const isTorso = mId === 'torso_rotation'; // Using specific id match based on earlier logic
+      if (isTorso) {
+        const logL = logs[`${currentSession.id}_${mId}_Left`];
+        const logR = logs[`${currentSession.id}_${mId}_Right`];
+        
+        if (logL?.weight && (logL?.reps || logL?.seconds) && logL?.repQuality && !logL?.timeSpent) {
+          const timeDiff = Math.floor((Date.now() - lastMachineLoggedAt.current) / 1000);
+          updateLog(currentSession.id, mId, 'timeSpent', timeDiff.toString(), 'Left');
+          lastMachineLoggedAt.current = Date.now();
+          didUpdate = true;
+        }
+        if (logR?.weight && (logR?.reps || logR?.seconds) && logR?.repQuality && !logR?.timeSpent) {
+          const timeDiff = Math.floor((Date.now() - lastMachineLoggedAt.current) / 1000);
+          updateLog(currentSession.id, mId, 'timeSpent', timeDiff.toString(), 'Right');
+          lastMachineLoggedAt.current = Date.now();
+          didUpdate = true;
+        }
+      } else {
+        const log = logs[`${currentSession.id}_${mId}`];
+        if (log?.weight && (log?.reps || log?.seconds) && log?.repQuality && !log?.timeSpent) {
+          const timeDiff = Math.floor((Date.now() - lastMachineLoggedAt.current) / 1000);
+          updateLog(currentSession.id, mId, 'timeSpent', timeDiff.toString());
+          lastMachineLoggedAt.current = Date.now();
+          didUpdate = true;
+        }
+      }
+    });
+    
+    if (didUpdate) {
+      // Optional: Since it auto-advances focus, we could log that time tracked.
+    }
+  }, [logs, currentSession, activeMachineIds]);
+
+  useEffect(() => {
     if (!currentSession || isPaused) return;
     const interval = setInterval(() => {
       setMachineTimeElapsed(Math.floor((Date.now() - lastMachineLoggedAt.current) / 1000));
@@ -5814,9 +5863,6 @@ function WorkoutTrackerView({
               await updateLog(currentSession.id!, editingWeightMachineId, 'reps', repsOrSeconds, side,);
               await updateLog(currentSession.id!, editingWeightMachineId, 'seconds', '0', side);
             }
-            await updateLog(currentSession.id!, editingWeightMachineId, 'timeSpent', timeDiff.toString(), side);
-            
-            lastMachineLoggedAt.current = Date.now();
             
             setEditingWeightMachineId(null);
             setEditingWeightSide(undefined);
@@ -5839,6 +5885,8 @@ function WorkoutTrackerView({
                 setEditingWeightMachineId(nextMachineId);
                 if (nextMachine?.name.toLowerCase().includes('torso rotation')) {
                   setEditingWeightSide('Left');
+                } else {
+                  setEditingWeightSide(undefined);
                 }
               }, 150);
             }

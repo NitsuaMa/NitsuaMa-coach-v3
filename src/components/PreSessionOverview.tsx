@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { SessionRoutineManagerModal } from './SessionRoutineManagerModal';
 import { MACHINE_LIST } from '../data/machine-database';
+import { CLINICAL_FLAGS_MATRIX } from '../data/clinical-matrix';
 import { Client, Machine, ExerciseLog, Routine, WorkoutSession, TrainerFocus, SessionNote, Trainer, FocusRecord } from '../types';
 
 interface PreSessionOverviewProps {
@@ -124,8 +125,13 @@ export function PreSessionOverview({
 
   const orthopedics = client.medicalHistory;
   const globalNotes = client.globalNotes;
-  const clinicalFlags = client.clinicalProfile || [];
-  const hasFlags = clinicalFlags.length > 0 || !!orthopedics || !!client.clinicalNotes;
+  
+  // Resolve client's flags from matrix
+  const clientFlags = (client.clinicalFlags || [])
+    .map(flagId => CLINICAL_FLAGS_MATRIX.find(f => f.id === flagId))
+    .filter(Boolean) as typeof CLINICAL_FLAGS_MATRIX;
+
+  const hasFlags = clientFlags.length > 0 || !!orthopedics || !!client.clinicalNotes;
   
   const selectedRoutineIds = (isAdjusting || ['Free', 'Create_A', 'Create_B'].includes(selectedRoutineType))
     ? adjustedMachineIds 
@@ -144,6 +150,10 @@ export function PreSessionOverview({
 
   const scheduledRoutineName = targetRoutine?.name || (routineA?.name || 'Routine A');
 
+  // Sort flags by severity
+  const severityOrder = { "Absolute Contraindication": 0, "High Risk": 1, "Moderate / Needs Modification": 2 };
+  clientFlags.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+
   return (
     <div className="flex-1 flex flex-col gap-6 p-6 md:p-8 h-full overflow-y-auto bg-[#0A2E46] text-[#F8F9FA] custom-scrollbar pb-32">
       
@@ -156,12 +166,6 @@ export function PreSessionOverview({
             </h2>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {hasFlags && (
-              <div className="px-3 py-1 bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded-full flex items-center gap-2 shadow-sm">
-                <AlertTriangle className="w-4 h-4" />
-                <span className="text-xs font-black uppercase tracking-widest">{clinicalFlags.join(', ')}{clinicalFlags.length > 0 && orthopedics ? ' - ' : ''}{orthopedics}</span>
-              </div>
-            )}
             {globalNotes && (
               <div className="px-3 py-1 bg-blue-500/20 text-[#38BDF8] border border-[#38BDF8]/30 rounded-full flex items-center gap-2 shadow-sm">
                 <History className="w-4 h-4" />
@@ -174,6 +178,62 @@ export function PreSessionOverview({
           <X className="w-4 h-4 mr-2" /> Cancel
         </Button>
       </div>
+
+      {clientFlags.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-500" /> Clinical Safety Briefing
+          </h3>
+          <div className="grid grid-cols-1 gap-3">
+            {clientFlags.map(flag => {
+              const bgColors = {
+                "Absolute Contraindication": "bg-rose-950/30 border-rose-600 animate-in fade-in zoom-in duration-500",
+                "High Risk": "bg-amber-950/30 border-amber-500",
+                "Moderate / Needs Modification": "bg-blue-950/30 border-blue-500"
+              };
+              const textColors = {
+                "Absolute Contraindication": "text-rose-400",
+                "High Risk": "text-amber-400",
+                "Moderate / Needs Modification": "text-blue-400"
+              };
+              return (
+                <div key={flag.id} className={`p-4 rounded-xl border-2 shadow-lg ${bgColors[flag.severity]} ${flag.severity === 'Absolute Contraindication' ? 'shadow-rose-900/20' : ''}`}>
+                  <div className="flex items-center gap-3 mb-2">
+                    <Badge variant="outline" className={`font-black uppercase tracking-widest text-[10px] ${textColors[flag.severity]} border-current`}>
+                      {flag.severity}
+                    </Badge>
+                    <span className="font-bold text-white text-sm uppercase tracking-wider">{flag.conditionName}</span>
+                  </div>
+                  <ul className="space-y-2 mt-3">
+                    {flag.protocolHandling.map((ph, idx) => (
+                      <li key={idx} className="flex items-start gap-2 text-sm text-slate-200">
+                        <span className={`mt-1 font-bold ${textColors[flag.severity]}`}>•</span>
+                        <div className="flex-1 leading-snug">
+                          {ph.instruction}
+                          {ph.setupModification && (
+                            <div className="mt-1 font-mono text-[10px] uppercase text-emerald-400 bg-emerald-950/30 p-1.5 rounded-md border border-emerald-900/50 inline-block">
+                              Setup Mod: {ph.setupModification}
+                            </div>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Legacy / Medical History Catchall */}
+      {(orthopedics || client.clinicalNotes) && (
+        <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+           <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Additional Medical Notes</h4>
+           {orthopedics && <p className="text-sm text-slate-300 font-medium mb-1">{orthopedics}</p>}
+           {client.clinicalNotes && <p className="text-sm text-slate-300 font-medium">{client.clinicalNotes}</p>}
+        </div>
+      )}
 
       {/* 2. Routine Context Panel */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

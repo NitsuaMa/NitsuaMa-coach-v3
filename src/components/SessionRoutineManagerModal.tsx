@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { Machine } from '../types';
 import { Trash2, Plus, GripVertical } from 'lucide-react';
 import {
@@ -125,7 +125,14 @@ export function SessionRoutineManagerModal({ isOpen, onOpenChange, currentMachin
     onOpenChange(false);
   };
 
-  const availableMachines = machines.filter(m => !editedIds.includes(m.id!));
+  const availableMachines = machines.filter(m => !editedIds.includes(m.id!)).sort((a, b) => (a.order || 0) - (b.order || 0));
+
+  const groupedMachines = availableMachines.reduce((acc, machine) => {
+    const region = machine.anatomicalRegion || 'Other';
+    if (!acc[region]) acc[region] = [];
+    acc[region].push(machine);
+    return acc;
+  }, {} as Record<string, Machine[]>);
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -177,13 +184,25 @@ export function SessionRoutineManagerModal({ isOpen, onOpenChange, currentMachin
                     <SelectValue placeholder="Quick add machine..." />
                   </SelectTrigger>
                   <SelectContent className="max-h-[250px] bg-slate-800 border-slate-700 text-white rounded-xl">
-                    {availableMachines.map(m => (
-                      <SelectItem key={m.id!} value={m.id!} className="py-3 hover:bg-slate-700 focus:bg-slate-700 focus:text-white">
-                        <div className="flex flex-col">
-                          <span className="font-bold">{m.name}</span>
-                          <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{m.targetMuscles || 'General'}</span>
-                        </div>
-                      </SelectItem>
+                    {Object.entries(groupedMachines).map(([region, regionMachines]) => (
+                      <SelectGroup key={region}>
+                        <SelectLabel className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-2 py-1.5 bg-slate-900 border-y border-slate-700/50 sticky top-0 z-10">
+                          {region}
+                        </SelectLabel>
+                        {regionMachines.map(m => (
+                          <SelectItem key={m.id!} value={m.id!} className="py-3 hover:bg-slate-700 focus:bg-slate-700 focus:text-white">
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold shrink-0">{m.name}</span>
+                                <span className="text-[8px] text-slate-500 italic uppercase">({m.kinematicClassification || 'Unknown'})</span>
+                              </div>
+                              <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest truncate max-w-[300px]">
+                                {m.targetMuscles || 'General'}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
                     ))}
                   </SelectContent>
                 </Select>

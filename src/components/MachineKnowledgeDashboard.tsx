@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { PlayCircle, X, ChevronRight, Activity, Users, TrendingUp, Wand2, Loader2, CheckCircle, Target, ShieldCheck, Settings2, UserCog, Zap } from 'lucide-react';
+import { PlayCircle, X, ChevronRight, Activity, Users, TrendingUp, Hand, Wand2, Loader2, CheckCircle, Target, ShieldCheck, Settings2, UserCog, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
 
@@ -369,8 +369,18 @@ export function MachineKnowledgeDashboard() {
                     )}
                     
                     <div className="mt-4 flex flex-wrap gap-2">
+                       {!isEditMode && activeMachine.kinematicClassification && (
+                         <Badge className="bg-slate-700 text-slate-300 border-slate-600 uppercase text-[9px] font-black tracking-widest px-3 py-1">
+                           {activeMachine.kinematicClassification}
+                         </Badge>
+                       )}
+                       {!isEditMode && activeMachine.setupGap && (
+                         <Badge className="bg-slate-700 text-slate-300 border-slate-600 uppercase text-[9px] font-black tracking-widest px-3 py-1">
+                           {activeMachine.setupGap}
+                         </Badge>
+                       )}
                        {isEditMode ? (
-                         <div className="flex flex-col gap-2 w-full">
+                         <div className="flex flex-col gap-2 w-full mt-2">
                             <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1">Target Muscles (Comma Separated)</span>
                             <input 
                               value={(editedMachine?.targetMuscles || []).join(', ')} 
@@ -386,6 +396,11 @@ export function MachineKnowledgeDashboard() {
                          ))
                        )}
                     </div>
+                    {!isEditMode && activeMachine.executionPosture === "Posterior Pelvic Tilt / Contracted Abdomen" && (
+                      <div className="mt-4 w-full p-3 bg-amber-900/30 border border-amber-500/50 rounded-lg text-amber-400 text-xs font-black uppercase tracking-widest flex items-center justify-center text-center shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                        ⚠️ STRICT POSTURE: Ensure Contracted Abdomen / Posterior Pelvic Tilt
+                      </div>
+                    )}
                   </div>
 
                   {/* CARD 2: Analytics & Telemetry (Col Span 2) */}
@@ -528,29 +543,56 @@ export function MachineKnowledgeDashboard() {
                     </div>
                   </div>
 
-                  {/* CARD 6: The AI Strategist (Col Span 6) */}
+                  {/* CARD 6: Sequencing Contraindications (Col Span 6) */}
+                  {!isEditMode && activeMachine.sequencingContraindications && activeMachine.sequencingContraindications.length > 0 && (
+                    <div className="col-span-1 md:col-span-6 bg-rose-950/20 border border-rose-900 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                      <span className="text-[10px] uppercase tracking-wider text-rose-400 font-black mb-3 flex items-center gap-2 shrink-0">
+                        <ShieldCheck className="w-4 h-4 text-rose-500" />
+                        Sequencing Contraindications
+                      </span>
+                      <ul className="space-y-1.5 mt-2">
+                        {activeMachine.sequencingContraindications.map((warning: string, i: number) => (
+                          <li key={i} className="text-xs text-rose-200/90 font-medium leading-normal bg-rose-900/20 p-3 rounded-lg border border-rose-800/50">
+                            {warning}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* CARD 7: The AI Strategist (Col Span 6) */}
                   <div className="col-span-1 md:col-span-6 bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-full bg-gradient-to-l from-[#F06C22]/5 to-transparent pointer-events-none" />
                     <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-[#F06C22]/10 border border-[#F06C22]/30 rounded-xl flex items-center justify-center">
-                          <Wand2 className="w-6 h-6 text-[#F06C22]" />
-                        </div>
-                        <div>
-                          <h3 className="text-xs md:text-sm font-black uppercase tracking-[0.2em] text-[#F8F9FA]">The AI Clinical Strategist</h3>
-                          <p className="text-[10px] text-slate-500 font-medium mt-1 font-mono uppercase tracking-widest">Generate neural-mapped setup protocols</p>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-[#F06C22]/10 border border-[#F06C22]/30 rounded-xl flex items-center justify-center">
+                            <Wand2 className="w-6 h-6 text-[#F06C22]" />
+                          </div>
+                          <div>
+                            <h3 className="text-xs md:text-sm font-black uppercase tracking-[0.2em] text-[#F8F9FA]">The AI Clinical Strategist</h3>
+                            <p className="text-[10px] text-slate-500 font-medium mt-1 font-mono uppercase tracking-widest">Generate neural-mapped setup protocols</p>
+                          </div>
                         </div>
                       </div>
-                      <Button 
-                        onClick={() => {
-                          setWizardSelectedMachine(activeMachine.id);
-                          setIsWizardOpen(true);
-                        }}
-                        className="bg-[#F06C22] hover:bg-[#D95B1B] text-white font-black uppercase tracking-widest text-[10px] h-11 px-8 rounded-full shadow-[0_8px_30px_rgba(240,108,34,0.3)] transition-all hover:scale-105 active:scale-95 flex items-center gap-2 group"
-                      >
-                        <Zap className="w-4 h-4 fill-white group-hover:animate-pulse" />
-                        Generate Setup Strategy
-                      </Button>
+                      <div className="flex items-center gap-4">
+                        {!isEditMode && activeMachine.requiresHandoff && (
+                          <Badge className="bg-sky-900/30 text-sky-400 border-sky-500/50 text-[10px] uppercase tracking-widest font-black py-2 px-3 flex items-center gap-2">
+                            <Hand className="w-3.5 h-3.5" />
+                            Intrapersonal Load Transfer Required
+                          </Badge>
+                        )}
+                        <Button 
+                          onClick={() => {
+                            setWizardSelectedMachine(activeMachine.id);
+                            setIsWizardOpen(true);
+                          }}
+                          className="bg-[#F06C22] hover:bg-[#D95B1B] text-white font-black uppercase tracking-widest text-[10px] h-11 px-8 rounded-full shadow-[0_8px_30px_rgba(240,108,34,0.3)] transition-all hover:scale-105 active:scale-95 flex items-center gap-2 group"
+                        >
+                          <Zap className="w-4 h-4 fill-white group-hover:animate-pulse" />
+                          Generate Setup Strategy
+                        </Button>
+                      </div>
                     </div>
                   </div>
 

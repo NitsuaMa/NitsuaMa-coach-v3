@@ -1,4 +1,4 @@
-import { PhysicalStressProfile } from './occupational-matrix';
+import { ActivityLevel } from './occupational-matrix';
 import { Client, WorkoutSession, ExerciseLog } from '../types';
 
 /**
@@ -10,7 +10,7 @@ export interface InsightsFilterState {
   endDate: string | null; // ISO Date String
   ageBrackets: { min: number; max: number; label: string }[];
   genders: ('Male' | 'Female' | 'Other')[];
-  physicalStressProfiles: PhysicalStressProfile[];
+  activityLevels: ActivityLevel[];
 }
 
 /**

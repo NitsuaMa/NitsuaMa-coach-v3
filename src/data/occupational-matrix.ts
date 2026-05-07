@@ -1,123 +1,52 @@
-export enum PhysicalStressProfile {
-  SEDENTARY_DESK = 'SEDENTARY_DESK',
-  PROLONGED_STANDING = 'PROLONGED_STANDING',
-  MANUAL_LABOR = 'MANUAL_LABOR',
-  HEALTHCARE_CLINICAL = 'HEALTHCARE_CLINICAL',
-  DYNAMIC_MIXED = 'DYNAMIC_MIXED',
-  TRANSPORTATION = 'TRANSPORTATION',
-  RETIRED_ACTIVE = 'RETIRED_ACTIVE',
-  RETIRED_INACTIVE = 'RETIRED_INACTIVE'
-}
+export type ActivityLevel = 'Highly Sedentary' | 'Sedentary' | 'Moderate / Mixed' | 'Active';
 
-export interface StressProfileData {
-  id: PhysicalStressProfile;
-  label: string;
-  description: string;
-  clinicalFocusMachines: string[];
-  marketingKeywords: string[];
-}
-
-export const STRESS_PROFILE_MATRIX: Record<PhysicalStressProfile, StressProfileData> = {
-  [PhysicalStressProfile.SEDENTARY_DESK]: {
-    id: PhysicalStressProfile.SEDENTARY_DESK,
-    label: 'Sedentary Desk Worker',
-    description: 'Prolonged sitting resulting in anterior pelvic tilt, shortened hip flexors, weak gluteal complex, and cervical/thoracic kyphosis (forward head posture). Elevated risk of spinal disc degeneration and metabolic syndrome.',
-    clinicalFocusMachines: ['Lumbar', 'Compound Row', 'Pulldown', 'Leg Press'],
-    marketingKeywords: ['Desk Job', 'Back Pain', 'Posture Correction', 'Executive Health', 'Tech Neck']
-  },
-  [PhysicalStressProfile.PROLONGED_STANDING]: {
-    id: PhysicalStressProfile.PROLONGED_STANDING,
-    label: 'Prolonged Standing',
-    description: 'Constant weight-bearing stress on lower extremities and lumbar spine. Risk of plantar fasciitis, varicose veins, chronic lower back fatigue, and knee joint compression.',
-    clinicalFocusMachines: ['Leg Press', 'Calf Raise', 'Lumbar', 'Hip Abduction'],
-    marketingKeywords: ['Retail Worker', 'Teacher', 'Standing All Day', 'Foot Pain', 'Lower Back Fatigue']
-  },
-  [PhysicalStressProfile.MANUAL_LABOR]: {
-    id: PhysicalStressProfile.MANUAL_LABOR,
-    label: 'Heavy Manual Labor',
-    description: 'High repetitive strain and acute impact risks. Prone to overuse injuries in shoulders, elbows, and lumbar spine. Asymmetrical development is common depending on specific tasks.',
-    clinicalFocusMachines: ['Chest Press', 'Compound Row', 'Overhead Press', 'Torso Rotation'],
-    marketingKeywords: ['Tradesman', 'Construction', 'Joint Protection', 'Injury Prevention', 'Longevity']
-  },
-  [PhysicalStressProfile.HEALTHCARE_CLINICAL]: {
-    id: PhysicalStressProfile.HEALTHCARE_CLINICAL,
-    label: 'Healthcare & Clinical',
-    description: 'Mixed dynamic movement, patient transferring (high shear force on lumbar), and frequent bending/reaching. High incidence of asymmetrical spinal loading and chronic stress.',
-    clinicalFocusMachines: ['Lumbar', 'Leg Press', 'Compound Row', 'Bicep'],
-    marketingKeywords: ['Nurse', 'Doctor', 'Shift Work', 'Back Protection', 'Occupational Hazard']
-  },
-  [PhysicalStressProfile.DYNAMIC_MIXED]: {
-    id: PhysicalStressProfile.DYNAMIC_MIXED,
-    label: 'Dynamic / Mixed Movement',
-    description: 'Intermittent periods of sitting, standing, and walking. Requires a balanced full-body conditioning approach to maintain overall metabolic and structural health.',
-    clinicalFocusMachines: ['Leg Press', 'Chest Press', 'Pulldown', 'Leg Curl'],
-    marketingKeywords: ['Sales', 'Real Estate', 'Busy Professional', 'Time Efficient Workout']
-  },
-  [PhysicalStressProfile.TRANSPORTATION]: {
-    id: PhysicalStressProfile.TRANSPORTATION,
-    label: 'Transportation & Driving',
-    description: 'Continuous seated posture exacerbated by vehicular vibration. High incidence of severe lumbar disc issues, poor circulation, and extremely tight anterior chains.',
-    clinicalFocusMachines: ['Lumbar', 'Leg Press', 'Chest Fly', 'Leg Extension'],
-    marketingKeywords: ['Driver', 'Pilot', 'Commuter', 'Sciatica', 'Circulation']
-  },
-  [PhysicalStressProfile.RETIRED_ACTIVE]: {
-    id: PhysicalStressProfile.RETIRED_ACTIVE,
-    label: 'Active Retiree',
-    description: 'Engages in recreational physical activities (golf, tennis, hiking). Focus is on maintaining explosive power (type II muscle fibers), joint stability, and tendon resilience.',
-    clinicalFocusMachines: ['Leg Press', 'Torso Rotation', 'Chest Press', 'Compound Row'],
-    marketingKeywords: ['Golf Fitness', 'Tennis', 'Active Aging', 'Joint Health', 'Performance']
-  },
-  [PhysicalStressProfile.RETIRED_INACTIVE]: {
-    id: PhysicalStressProfile.RETIRED_INACTIVE,
-    label: 'Inactive Retiree',
-    description: 'Low physical demand resulting in rapid sarcopenia, bone mineral density loss (osteopenia/osteoporosis), and reduced basal metabolic rate. High fall risk.',
-    clinicalFocusMachines: ['Leg Press', 'Hip Adduction', 'Hip Abduction', 'Lumbar'],
-    marketingKeywords: ['Fall Prevention', 'Bone Density', 'Osteoporosis', 'Senior Fitness', 'Muscle Loss']
-  }
-};
-
-export interface OccupationEntry {
+export interface OccupationalProfile {
   id: string;
-  label: string;
-  category: 'Corporate & Tech' | 'Healthcare' | 'Trades & Manual Labor' | 'Public Service' | 'Education & Retail' | 'Retired';
-  stressProfile: PhysicalStressProfile;
+  title: string;
+  category: string;
+  activityLevel: ActivityLevel;
+  primaryErgonomicRisk: string;
 }
 
-export const OCCUPATIONS: OccupationEntry[] = [
-  // Corporate & Tech
-  { id: 'occ-software', label: 'Software Engineer', category: 'Corporate & Tech', stressProfile: PhysicalStressProfile.SEDENTARY_DESK },
-  { id: 'occ-executive', label: 'C-Suite Executive', category: 'Corporate & Tech', stressProfile: PhysicalStressProfile.SEDENTARY_DESK },
-  { id: 'occ-finance', label: 'Finance / Accountant', category: 'Corporate & Tech', stressProfile: PhysicalStressProfile.SEDENTARY_DESK },
-  { id: 'occ-sales', label: 'Outside Sales', category: 'Corporate & Tech', stressProfile: PhysicalStressProfile.DYNAMIC_MIXED },
-  { id: 'occ-admin', label: 'Administrative Assistant', category: 'Corporate & Tech', stressProfile: PhysicalStressProfile.SEDENTARY_DESK },
+export const OCCUPATIONS: OccupationalProfile[] = [
+  // 1. Corporate, Legal & Finance
+  { id: 'occ-exec', title: 'Executive / C-Suite', category: 'Corporate, Legal & Finance', activityLevel: 'Highly Sedentary', primaryErgonomicRisk: 'Chronic lumbar compression, high psychological stress' },
+  { id: 'occ-lawyer', title: 'Attorney / Legal Professional', category: 'Corporate, Legal & Finance', activityLevel: 'Highly Sedentary', primaryErgonomicRisk: 'Prolonged seated posture, forward head translation' },
+  { id: 'occ-finance', title: 'Finance / Accounting', category: 'Corporate, Legal & Finance', activityLevel: 'Highly Sedentary', primaryErgonomicRisk: 'Screen-bound cervical strain' },
+  { id: 'occ-consultant', title: 'Management Consultant', category: 'Corporate, Legal & Finance', activityLevel: 'Sedentary', primaryErgonomicRisk: 'High travel volume, asymmetric carrying loads' },
 
-  // Healthcare
-  { id: 'occ-rn', label: 'Registered Nurse', category: 'Healthcare', stressProfile: PhysicalStressProfile.HEALTHCARE_CLINICAL },
-  { id: 'occ-md', label: 'Physician / Surgeon', category: 'Healthcare', stressProfile: PhysicalStressProfile.HEALTHCARE_CLINICAL },
-  { id: 'occ-dental', label: 'Dentist / Hygienist', category: 'Healthcare', stressProfile: PhysicalStressProfile.HEALTHCARE_CLINICAL }, // Notably asymmetrical
-  { id: 'occ-pt', label: 'Physical Therapist', category: 'Healthcare', stressProfile: PhysicalStressProfile.DYNAMIC_MIXED },
+  // 2. Healthcare & Medicine
+  { id: 'occ-md', title: 'Physician / Surgeon', category: 'Healthcare & Medicine', activityLevel: 'Moderate / Mixed', primaryErgonomicRisk: 'Prolonged standing, severe asymmetrical leaning' },
+  { id: 'occ-dentist', title: 'Dentist / Orthodontist', category: 'Healthcare & Medicine', activityLevel: 'Sedentary', primaryErgonomicRisk: 'Extreme cervical flexion, thoracic rotation and sustained isometric tension' },
+  { id: 'occ-rn', title: 'Registered Nurse / Allied Health', category: 'Healthcare & Medicine', activityLevel: 'Active', primaryErgonomicRisk: 'High volume walking, unpredictable heavy lifting (patient transfer)' },
+  { id: 'occ-clinic-admin', title: 'Clinic Administrator', category: 'Healthcare & Medicine', activityLevel: 'Sedentary', primaryErgonomicRisk: 'Standard desk-bound pelvic tilt' },
 
-  // Trades & Manual Labor
-  { id: 'occ-construction', label: 'Construction Worker', category: 'Trades & Manual Labor', stressProfile: PhysicalStressProfile.MANUAL_LABOR },
-  { id: 'occ-electrician', label: 'Electrician', category: 'Trades & Manual Labor', stressProfile: PhysicalStressProfile.MANUAL_LABOR },
-  { id: 'occ-plumber', label: 'Plumber', category: 'Trades & Manual Labor', stressProfile: PhysicalStressProfile.MANUAL_LABOR },
-  { id: 'occ-mechanic', label: 'Auto Mechanic', category: 'Trades & Manual Labor', stressProfile: PhysicalStressProfile.MANUAL_LABOR },
-  { id: 'occ-driver', label: 'Commercial Driver', category: 'Trades & Manual Labor', stressProfile: PhysicalStressProfile.TRANSPORTATION },
+  // 3. Engineering, Tech & Science
+  { id: 'occ-software', title: 'Software Developer / IT', category: 'Engineering, Tech & Science', activityLevel: 'Highly Sedentary', primaryErgonomicRisk: 'Severe forward head posture, shortened pectoral girdle' },
+  { id: 'occ-aero-eng', title: 'Aerospace / Mechanical Engineer', category: 'Engineering, Tech & Science', activityLevel: 'Sedentary', primaryErgonomicRisk: 'Mixed desk and lab bench posture' },
+  { id: 'occ-scientist', title: 'Bioscience / Research Scientist', category: 'Engineering, Tech & Science', activityLevel: 'Moderate / Mixed', primaryErgonomicRisk: 'Prolonged microscopic/bench work, cervical strain' },
 
-  // Public Service
-  { id: 'occ-police', label: 'Law Enforcement', category: 'Public Service', stressProfile: PhysicalStressProfile.DYNAMIC_MIXED },
-  { id: 'occ-fire', label: 'Firefighter', category: 'Public Service', stressProfile: PhysicalStressProfile.MANUAL_LABOR },
-  { id: 'occ-military', label: 'Military Personnel', category: 'Public Service', stressProfile: PhysicalStressProfile.MANUAL_LABOR },
-  { id: 'occ-postal', label: 'Postal / Delivery Worker', category: 'Public Service', stressProfile: PhysicalStressProfile.PROLONGED_STANDING },
+  // 4. Real Estate & Sales
+  { id: 'occ-re-broker', title: 'Real Estate Broker / Agent', category: 'Real Estate & Sales', activityLevel: 'Moderate / Mixed', primaryErgonomicRisk: 'Frequent transitions, standing' },
+  { id: 'occ-outside-sales', title: 'Outside / Regional Sales', category: 'Real Estate & Sales', activityLevel: 'Sedentary', primaryErgonomicRisk: 'High-frequency driving, unilateral pedal operation, lumbar stiffness' },
 
-  // Education & Retail
-  { id: 'occ-teacher', label: 'Teacher / Educator', category: 'Education & Retail', stressProfile: PhysicalStressProfile.PROLONGED_STANDING },
-  { id: 'occ-retail', label: 'Retail Associate', category: 'Education & Retail', stressProfile: PhysicalStressProfile.PROLONGED_STANDING },
-  { id: 'occ-hospitality', label: 'Bartender / Server', category: 'Education & Retail', stressProfile: PhysicalStressProfile.PROLONGED_STANDING },
-  { id: 'occ-chef', label: 'Chef / Line Cook', category: 'Education & Retail', stressProfile: PhysicalStressProfile.PROLONGED_STANDING },
-  { id: 'occ-manager', label: 'Store Manager', category: 'Education & Retail', stressProfile: PhysicalStressProfile.DYNAMIC_MIXED },
+  // 5. Manufacturing & Operations
+  { id: 'occ-ops-manager', title: 'Plant / Operations Manager', category: 'Manufacturing & Operations', activityLevel: 'Moderate / Mixed', primaryErgonomicRisk: 'Concrete floor walking mixed with desk administration' },
+  { id: 'occ-logistics', title: 'Logistics Director', category: 'Manufacturing & Operations', activityLevel: 'Sedentary', primaryErgonomicRisk: 'High-stress desk-bound operations' },
 
-  // Retired
-  { id: 'occ-ret-active', label: 'Retired (Active Lifetime)', category: 'Retired', stressProfile: PhysicalStressProfile.RETIRED_ACTIVE },
-  { id: 'occ-ret-sedentary', label: 'Retired (Sedentary Lifetime)', category: 'Retired', stressProfile: PhysicalStressProfile.RETIRED_INACTIVE }
+  // 6. Education & Public Service
+  { id: 'occ-uni-faculty', title: 'University Faculty / Administrator', category: 'Education & Public Service', activityLevel: 'Sedentary', primaryErgonomicRisk: 'Prolonged seated reading/grading' },
+  { id: 'occ-teacher', title: 'Teacher / Educator', category: 'Education & Public Service', activityLevel: 'Active', primaryErgonomicRisk: 'Prolonged standing, bending' },
+
+  // 7. Lifestyle & Retirement
+  { id: 'occ-retired-active', title: 'Retired (Active Lifestyle)', category: 'Lifestyle & Retirement', activityLevel: 'Active', primaryErgonomicRisk: 'Variable recreation (golf, tennis) requiring rotational mobility' },
+  { id: 'occ-retired-sedentary', title: 'Retired (Sedentary Lifestyle)', category: 'Lifestyle & Retirement', activityLevel: 'Highly Sedentary', primaryErgonomicRisk: 'Sarcopenia, general deconditioning, joint stiffness' },
+  { id: 'occ-sah-active', title: 'Stay at Home (Active)', category: 'Lifestyle & Retirement', activityLevel: 'Active', primaryErgonomicRisk: 'Child-rearing lifting mechanics, floor-to-stand transitions' },
+  { id: 'occ-sah-sedentary', title: 'Stay at Home (Sedentary)', category: 'Lifestyle & Retirement', activityLevel: 'Sedentary', primaryErgonomicRisk: 'General deconditioning' }
 ];
+
+export function getErgonomicRisk(occupationIdOrTitle: string): string | null {
+  const occ = OCCUPATIONS.find(o => o.id === occupationIdOrTitle || o.title === occupationIdOrTitle);
+  return occ ? occ.primaryErgonomicRisk : null;
+}
+

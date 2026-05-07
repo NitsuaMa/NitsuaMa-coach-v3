@@ -87,7 +87,11 @@ import { OperationType, handleFirestoreError } from "../lib/firestore-errors";
 import { WorkoutChartGrid } from "./WorkoutChartGrid";
 import { ClientHistoryCalendar } from "./ClientHistoryCalendar";
 import { OccupationSelect } from "./OccupationSelect";
+import { getErgonomicRisk } from "../data/occupational-matrix";
 import { cn, parseSessionDate } from "../lib/utils";
+import { RoutineBuilderView } from "./RoutineBuilderView";
+import { CLINICAL_FLAGS_MATRIX } from "../data/clinical-matrix";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 
 export function ClientProfileView({
   clientId,
@@ -166,6 +170,7 @@ export function ClientProfileView({
   const [isSavingRoutine, setIsSavingRoutine] = useState<
     Record<string, boolean>
   >({});
+  const [routineBuilderTarget, setRoutineBuilderTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedInsightMachine, setSelectedInsightMachine] =
     useState<Machine | null>(null);
@@ -188,6 +193,7 @@ export function ClientProfileView({
         occupation: client.occupation || "",
         isRetired: client.isRetired ?? false,
         clinicalProfile: client.clinicalProfile || [],
+        clinicalFlags: client.clinicalFlags || [],
         clinicalNotes: client.clinicalNotes || "",
         activityLevel: client.activityLevel || "Moderate",
         trainingPedigree: client.trainingPedigree || "Novice",
@@ -658,6 +664,19 @@ export function ClientProfileView({
       </div>
     );
 
+  if (routineBuilderTarget) {
+    return (
+      <RoutineBuilderView
+        client={client}
+        onBack={() => setRoutineBuilderTarget(null)}
+        onSaveRoutine={(machineIds) => {
+          setStagedMachineIds(prev => ({ ...prev, [routineBuilderTarget]: machineIds }));
+          setRoutineBuilderTarget(null);
+        }}
+      />
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -847,6 +866,16 @@ export function ClientProfileView({
                 </button>
               )}
             </div>
+            
+            {client.occupation && getErgonomicRisk(client.occupation) && (
+              <div className="mt-1 mb-3 flex items-start gap-1.5 text-slate-400 bg-slate-800/50 p-2 rounded-lg border border-slate-700/50 w-fit max-w-full">
+                <AlertCircle className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                <span className="text-[10px] font-bold tracking-wide italic leading-snug">
+                  <span className="text-slate-300 font-black uppercase not-italic mr-1 tracking-wider">Ergonomic Risk:</span> 
+                  {getErgonomicRisk(client.occupation)}
+                </span>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[8px] sm:text-[10px] font-bold uppercase tracking-widest text-white/80">
               <div className="flex items-center gap-1 bg-white/10 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border border-white/5 whitespace-nowrap">
@@ -1241,6 +1270,15 @@ export function ClientProfileView({
                         <Button
                           variant="outline"
                           size="sm"
+                          className="h-8 rounded-xl font-black uppercase text-[9px] border-sky-500/50 text-sky-600 hover:bg-sky-50"
+                          onClick={() => setRoutineBuilderTarget(routineName)}
+                        >
+                          <Settings className="w-3 h-3 mr-1" />
+                          Launch AI Builder
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="h-8 rounded-xl font-black uppercase text-[9px] border-dashed"
                           onClick={() =>
                             handleApplyTemplate("STANDARD_MALE", routineName)
@@ -1252,56 +1290,72 @@ export function ClientProfileView({
                     </div>
                   </CardHeader>
                   <CardContent className="p-8 pt-4">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 max-h-[500px] sm:max-h-[600px] overflow-y-auto pr-2 custom-scrollbar py-2">
-                      {machines
-                        .sort((a, b) => (a.order || 0) - (b.order || 0))
-                        .map((machine) => {
-                          const routineMachineIds =
-                            stagedMachineIds[routineName] || [];
-                          const isIn = routineMachineIds.includes(machine.id!);
-                          const seqPosition = isIn
-                            ? routineMachineIds.indexOf(machine.id!) + 1
-                            : null;
+                    <div className="max-h-[500px] sm:max-h-[600px] overflow-y-auto pr-2 custom-scrollbar py-2 space-y-6">
+                      {Object.entries(
+                        machines
+                          .sort((a, b) => (a.order || 0) - (b.order || 0))
+                          .reduce((acc, machine) => {
+                            const region = machine.anatomicalRegion || 'Other';
+                            if (!acc[region]) acc[region] = [];
+                            acc[region].push(machine);
+                            return acc;
+                          }, {} as Record<string, Machine[]>)
+                      ).map(([region, regionMachines]) => (
+                        <div key={region} className="space-y-3">
+                          <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-widest border-b border-slate-200 pb-1 sticky top-0 bg-white z-20">
+                            {region}
+                          </h4>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+                            {regionMachines.map((machine) => {
+                              const routineMachineIds =
+                                stagedMachineIds[routineName] || [];
+                              const isIn = routineMachineIds.includes(machine.id!);
+                              const seqPosition = isIn
+                                ? routineMachineIds.indexOf(machine.id!) + 1
+                                : null;
 
-                          return (
-                            <button
-                              key={machine.id}
-                              onClick={() =>
-                                toggleMachineInRoutine(routineName, machine.id!)
-                              }
-                              className={`flex items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 transition-all text-left relative group
-                              ${
-                                isIn
-                                  ? "bg-primary/5 border-primary shadow-md z-10"
-                                  : "bg-muted/10 border-transparent opacity-40 hover:opacity-100 hover:border-muted"
-                              }`}
-                            >
-                              <div
-                                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 transition-all
-                              ${
-                                isIn
-                                  ? "bg-primary text-white shadow-lg"
-                                  : "bg-muted text-muted-foreground border-2 border-dashed border-muted-foreground/10"
-                              }`}
-                              >
-                                {isIn ? (
-                                  <span className="font-black text-[10px] sm:text-xs">
-                                    {seqPosition}
-                                  </span>
-                                ) : (
-                                  <Plus className="w-3.5 h-3.5 opacity-40 group-hover:opacity-100" />
-                                )}
-                              </div>
-                              <div className="min-w-0">
-                                <span
-                                  className={`text-[10px] sm:text-[11px] font-black uppercase tracking-tight truncate block ${isIn ? "text-primary" : "text-muted-foreground"}`}
+                              return (
+                                <button
+                                  key={machine.id}
+                                  onClick={() =>
+                                    toggleMachineInRoutine(routineName, machine.id!)
+                                  }
+                                  className={`flex items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 transition-all text-left relative group
+                                  ${
+                                    isIn
+                                      ? "bg-primary/5 border-primary shadow-md z-10"
+                                      : "bg-muted/10 border-transparent opacity-40 hover:opacity-100 hover:border-muted"
+                                  }`}
                                 >
-                                  {machine.name}
-                                </span>
-                              </div>
-                            </button>
-                          );
-                        })}
+                                  <div
+                                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 transition-all
+                                  ${
+                                    isIn
+                                      ? "bg-primary text-white shadow-lg"
+                                      : "bg-muted text-muted-foreground border-2 border-dashed border-muted-foreground/10"
+                                  }`}
+                                  >
+                                    {isIn ? (
+                                      <span className="font-black text-[10px] sm:text-xs">
+                                        {seqPosition}
+                                      </span>
+                                    ) : (
+                                      <Plus className="w-3.5 h-3.5 opacity-40 group-hover:opacity-100" />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <span
+                                      className={`text-[10px] sm:text-[11px] font-black uppercase tracking-tight truncate block ${isIn ? "text-primary" : "text-muted-foreground"}`}
+                                    >
+                                      {machine.name}
+                                    </span>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </CardContent>
                   <CardFooter className="p-8 pt-0 border-t border-border/10 mt-4 flex items-center justify-between">
@@ -1666,16 +1720,19 @@ export function ClientProfileView({
                               : sessionLogs[idx - 1].updatedAt?.toMillis?.() ||
                                 sessionLogs[idx - 1].createdAt?.toMillis?.();
 
-                          let durationMs = 0;
                           let durationStr = "---";
-                          if (logTime && prevTime) {
-                            durationMs = logTime - prevTime;
+                          if (log.timeSpent) {
+                            const secsTotal = parseInt(log.timeSpent, 10);
+                            if (!isNaN(secsTotal)) {
+                              const mins = Math.floor(secsTotal / 60);
+                              const secs = secsTotal % 60;
+                              durationStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+                            }
+                          } else if (logTime && prevTime) {
+                            const durationMs = logTime - prevTime;
                             const mins = Math.floor(durationMs / 60000);
-                            const secs = Math.floor(
-                              (durationMs % 60000) / 1000,
-                            );
-                            durationStr =
-                              mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+                            const secs = Math.floor((durationMs % 60000) / 1000);
+                            durationStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
                           }
 
                           return (
@@ -1766,7 +1823,16 @@ export function ClientProfileView({
                                   : sLogs[idx - 1].updatedAt?.toMillis() ||
                                     sLogs[idx - 1].createdAt?.toMillis();
 
-                              if (lTime && pTime) {
+                              let diffMs = 0;
+                              if (l.timeSpent) {
+                                const secsArr = parseInt(l.timeSpent, 10);
+                                if (!isNaN(secsArr)) diffMs = secsArr * 1000;
+                              }
+                              
+                              if (diffMs > 0) {
+                                totalDiffMs += diffMs;
+                                count++;
+                              } else if (lTime && pTime) {
                                 totalDiffMs += lTime - pTime;
                                 count++;
                               }
@@ -1940,83 +2006,95 @@ export function ClientProfileView({
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-8">
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    "Cardiac/Cardiovascular",
-                    "Lumbar/Spine",
-                    "Cervical/Neck",
-                    "Joint Replacement",
-                    "Osteoarthritis",
-                    "Hypertension",
-                    "Other",
-                  ].map((ailment) => (
-                    <label
-                      key={ailment}
-                      className="flex items-center gap-3 cursor-pointer group"
-                    >
-                      <div className="relative flex items-center justify-center">
-                        <input
-                          type="checkbox"
-                          className="peer appearance-none w-5 h-5 border-2 border-slate-600 rounded bg-slate-900 checked:bg-[#38BDF8] checked:border-[#38BDF8] transition-all cursor-pointer"
-                          checked={
-                            infoForm.clinicalProfile?.includes(ailment) || false
+                {(() => {
+                  // Group clinical flags by category
+                  const groupedFlags = CLINICAL_FLAGS_MATRIX.reduce((acc, flag) => {
+                    if (!acc[flag.category]) acc[flag.category] = [];
+                    acc[flag.category].push(flag);
+                    return acc;
+                  }, {} as Record<string, typeof CLINICAL_FLAGS_MATRIX>);
+                
+                  return (
+                    <>
+                      <Accordion type="multiple" className="w-full space-y-4">
+                        {Object.entries(groupedFlags).map(([category, flags]) => (
+                          <AccordionItem key={category} value={category} className="border-slate-700 bg-slate-900/50 rounded-xl px-4 py-2">
+                             <AccordionTrigger className="hover:no-underline text-slate-200 font-bold uppercase tracking-widest text-[11px]">
+                               {category}
+                             </AccordionTrigger>
+                             <AccordionContent className="pt-2 pb-4 space-y-3">
+                               {flags.map((flag) => {
+                                 const isChecked = infoForm.clinicalFlags?.includes(flag.id) || false;
+                                 return (
+                                   <label
+                                     key={flag.id}
+                                     className={`flex items-start gap-3 cursor-pointer group p-3 rounded-xl border-2 transition-all ${isChecked ? 'bg-[#38BDF8]/10 border-[#38BDF8]/30' : 'bg-slate-950/50 border-transparent hover:border-slate-700'}`}
+                                   >
+                                     <div className="relative flex items-center justify-center shrink-0 mt-0.5">
+                                       <input
+                                         type="checkbox"
+                                         className="peer appearance-none w-5 h-5 border-2 border-slate-600 rounded bg-slate-900 checked:bg-[#38BDF8] checked:border-[#38BDF8] transition-all cursor-pointer"
+                                         checked={isChecked}
+                                         onChange={(e) => {
+                                           const current = infoForm.clinicalFlags || [];
+                                           if (e.target.checked)
+                                             setInfoForm((f) => ({
+                                               ...f,
+                                               clinicalFlags: [...current, flag.id],
+                                             }));
+                                           else
+                                             setInfoForm((f) => ({
+                                               ...f,
+                                               clinicalFlags: current.filter((a) => a !== flag.id),
+                                             }));
+                                         }}
+                                       />
+                                       <div className="absolute inset-0 flex items-center justify-center opacity-0 peer-checked:opacity-100 pointer-events-none text-white">
+                                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
+                                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                         </svg>
+                                       </div>
+                                     </div>
+                                     <div className="flex flex-col space-y-1">
+                                       <div className="flex items-center gap-2 flex-wrap">
+                                          <span className={`text-sm font-bold leading-tight ${isChecked ? 'text-white' : 'text-slate-300 group-hover:text-slate-200'}`}>
+                                            {flag.conditionName}
+                                          </span>
+                                          <Badge variant="outline" className={`text-[9px] uppercase tracking-widest font-black leading-none py-1
+                                            ${flag.severity === 'Absolute Contraindication' ? 'border-rose-600 bg-rose-950/30 text-rose-400' :
+                                              flag.severity === 'High Risk' ? 'border-amber-500 bg-amber-950/30 text-amber-400' :
+                                              'border-blue-500 bg-blue-950/30 text-blue-400'}
+                                          `}>
+                                            {flag.severity}
+                                          </Badge>
+                                       </div>
+                                     </div>
+                                   </label>
+                                 );
+                               })}
+                             </AccordionContent>
+                          </AccordionItem>
+                        ))}
+                      </Accordion>
+                      <div className="mt-6 space-y-2 animate-in fade-in slide-in-from-top-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                          Other / Specific Ailments
+                        </Label>
+                        <Textarea
+                          value={infoForm.clinicalNotes || ""}
+                          onChange={(e) =>
+                            setInfoForm((f) => ({
+                              ...f,
+                              clinicalNotes: e.target.value,
+                            }))
                           }
-                          onChange={(e) => {
-                            const current = infoForm.clinicalProfile || [];
-                            if (e.target.checked)
-                              setInfoForm((f) => ({
-                                ...f,
-                                clinicalProfile: [...current, ailment],
-                              }));
-                            else
-                              setInfoForm((f) => ({
-                                ...f,
-                                clinicalProfile: current.filter(
-                                  (a) => a !== ailment,
-                                ),
-                              }));
-                          }}
+                          className="min-h-[80px] rounded-2xl font-bold p-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8] transition-all"
+                          placeholder="Specify any other conditions..."
                         />
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 peer-checked:opacity-100 pointer-events-none text-white">
-                          <svg
-                            className="w-3.5 h-3.5"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={4}
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
-                        </div>
                       </div>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300 group-hover:text-white transition-colors">
-                        {ailment}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                {infoForm.clinicalProfile?.includes("Other") && (
-                  <div className="mt-6 space-y-2 animate-in fade-in slide-in-from-top-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                      Specific Ailments/Contraindications
-                    </Label>
-                    <Textarea
-                      value={infoForm.clinicalNotes || ""}
-                      onChange={(e) =>
-                        setInfoForm((f) => ({
-                          ...f,
-                          clinicalNotes: e.target.value,
-                        }))
-                      }
-                      className="min-h-[80px] rounded-2xl font-bold p-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8] transition-all"
-                      placeholder="Specify the condition..."
-                    />
-                  </div>
-                )}
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
 

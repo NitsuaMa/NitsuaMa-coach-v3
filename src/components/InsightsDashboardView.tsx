@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Filter, Loader2, AlertCircle, BarChart3, Activity, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PhysicalStressProfile } from '../data/occupational-matrix';
+import { ActivityLevel } from '../data/occupational-matrix';
 import { InsightsFilterState } from '../data/insights-logic';
 import { DemographicRetentionChart } from './DemographicRetentionChart';
 import { MachineEfficacyChart } from './MachineEfficacyChart';
@@ -82,19 +82,15 @@ export function InsightsDashboardView(props: any) {
               defaultValue="all" 
               onChange={(e) => setFilters(prev => ({ 
                 ...prev, 
-                physicalStressProfiles: e.target.value === 'all' ? [] : [e.target.value as PhysicalStressProfile] 
+                activityLevels: e.target.value === 'all' ? [] : [e.target.value as ActivityLevel] 
               }))}
               className="bg-slate-800 border border-slate-700 text-white font-bold h-12 rounded-xl px-4 appearance-none outline-none focus:ring-2 focus:ring-[#38BDF8] w-full"
             >
-              <option value="all">All Profiles</option>
-              <option value={PhysicalStressProfile.SEDENTARY_DESK}>Sedentary Desk</option>
-              <option value={PhysicalStressProfile.PROLONGED_STANDING}>Prolonged Standing</option>
-              <option value={PhysicalStressProfile.MANUAL_LABOR}>Manual Labor</option>
-              <option value={PhysicalStressProfile.HEALTHCARE_CLINICAL}>Healthcare / Clinical</option>
-              <option value={PhysicalStressProfile.DYNAMIC_MIXED}>Dynamic / Mixed</option>
-              <option value={PhysicalStressProfile.TRANSPORTATION}>Transportation</option>
-              <option value={PhysicalStressProfile.RETIRED_ACTIVE}>Retired (Active)</option>
-              <option value={PhysicalStressProfile.RETIRED_INACTIVE}>Retired (Inactive)</option>
+              <option value="all">All Activity Levels</option>
+              <option value="Highly Sedentary">Highly Sedentary</option>
+              <option value="Sedentary">Sedentary</option>
+              <option value="Moderate / Mixed">Moderate / Mixed</option>
+              <option value="Active">Active</option>
             </select>
           </div>
         </div>

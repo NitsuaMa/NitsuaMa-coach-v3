@@ -5,10 +5,11 @@ import {
   SelectGroup, 
   SelectItem, 
   SelectLabel, 
+  SelectSeparator,
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { OCCUPATIONS, OccupationEntry } from '../data/occupational-matrix';
+import { OCCUPATIONS, OccupationalProfile } from '../data/occupational-matrix';
 
 export interface OccupationSelectProps {
   value: string;
@@ -25,7 +26,7 @@ export function OccupationSelect({ value, onChange, disabled }: OccupationSelect
       }
       acc[occ.category].push(occ);
       return acc;
-    }, {} as Record<string, OccupationEntry[]>);
+    }, {} as Record<string, OccupationalProfile[]>);
   }, []);
 
   return (
@@ -33,24 +34,26 @@ export function OccupationSelect({ value, onChange, disabled }: OccupationSelect
       <SelectTrigger className="h-12 bg-white border border-slate-200 text-slate-900 focus:ring-[#F06C22] rounded-xl font-bold disabled:opacity-50 hover:bg-slate-50 transition-colors w-full shadow-sm">
         <SelectValue placeholder={disabled ? "N/A" : "Select Client Occupation..."} />
       </SelectTrigger>
-      <SelectContent className="bg-white border-slate-200 rounded-xl max-h-[300px] shadow-2xl">
-        {(Object.entries(groupedOccupations) as [string, OccupationEntry[]][]).map(([category, occupations]) => (
-          <SelectGroup key={category} className="border-b border-slate-100 last:border-0 pb-1 mb-1 last:pb-0 last:mb-0">
-            <SelectLabel className="font-black text-[10px] uppercase tracking-widest text-slate-500 py-2 px-3">
+      <SelectContent className="bg-slate-900 border-slate-700 rounded-xl max-h-[300px] shadow-2xl">
+        {(Object.entries(groupedOccupations) as [string, OccupationalProfile[]][]).map(([category, occupations], idx, arr) => (
+          <SelectGroup key={category}>
+            <SelectLabel className="text-[10px] uppercase tracking-wider text-slate-500 font-bold py-2 px-3 sticky top-0 bg-slate-900/95 backdrop-blur-sm z-10">
               {category}
             </SelectLabel>
             {occupations.map((occ) => (
               <SelectItem 
                 key={occ.id} 
-                value={occ.id}
-                className="font-bold text-slate-800 focus:bg-[#38BDF8]/10 focus:text-[#0A2E46] cursor-pointer rounded-lg mx-1 py-2 text-sm"
+                value={occ.title} // Use title as value for simpler integration with existing data format
+                className="font-medium text-slate-200 focus:bg-slate-800 focus:text-white cursor-pointer rounded-lg mx-1 py-2.5 text-sm transition-colors"
               >
-                {occ.label}
+                {occ.title}
               </SelectItem>
             ))}
+            {idx < arr.length - 1 && <SelectSeparator className="bg-slate-800 my-1 mx-2" />}
           </SelectGroup>
         ))}
       </SelectContent>
     </Select>
   );
 }
+

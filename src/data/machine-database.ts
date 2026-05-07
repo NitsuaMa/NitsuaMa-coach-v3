@@ -1,4 +1,9 @@
 export interface MachineKnowledge {
+  kinematicClassification?: string;
+  setupGap?: string;
+  executionPosture?: string;
+  requiresHandoff?: boolean;
+  sequencingContraindications?: string[];
   id: string;
   name: string;
   category: string;
@@ -20,6 +25,9 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "leg_press": {
     id: "leg_press",
     name: "Leg Press",
+    kinematicClassification: "Compound Push",
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    requiresHandoff: false,
     category: "Lower Body",
     baseMale: 160,
     baseFemale: 60,
@@ -72,6 +80,10 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "leg_extension": {
     id: "leg_extension",
     name: "Leg Extension",
+    kinematicClassification: "Simple Push",
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    requiresHandoff: false,
+    setupGap: "Gap 2",
     category: "Lower Body",
     baseMale: 80,
     baseFemale: 40,
@@ -129,6 +141,11 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "leg_curl": {
     id: "leg_curl",
     name: "Leg Curl",
+    kinematicClassification: "Simple Pull",
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    requiresHandoff: false,
+    setupGap: "Gap 2",
+    sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."],
     category: "Lower Body",
     baseMale: 70,
     baseFemale: 40,
@@ -185,6 +202,10 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "abduction": {
     id: "abduction",
     name: "Abduction",
+    kinematicClassification: "Simple Push",
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    requiresHandoff: false,
+    setupGap: "Custom Gap",
     category: "Hips",
     baseMale: 50,
     baseFemale: 30,
@@ -237,6 +258,11 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "adduction": {
     id: "adduction",
     name: "Adduction",
+    kinematicClassification: "Simple Pull",
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    requiresHandoff: false,
+    setupGap: "Custom Gap",
+    sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."],
     category: "Hips",
     baseMale: 60,
     baseFemale: 40,
@@ -290,6 +316,9 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "chest_press": {
     id: "chest_press",
     name: "Chest Press",
+    kinematicClassification: "Compound Push",
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    requiresHandoff: false,
     category: "Upper Body - Push",
     baseMale: 60,
     baseFemale: 20,
@@ -336,6 +365,9 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "overhead_press": {
     id: "overhead_press",
     name: "Overhead Press",
+    kinematicClassification: "Compound Push",
+    executionPosture: "Posterior Pelvic Tilt / Contracted Abdomen",
+    requiresHandoff: false,
     category: "Upper Body - Push",
     baseMale: 40,
     baseFemale: 20,
@@ -385,6 +417,9 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "seated_dip": {
     id: "seated_dip",
     name: "Seated Dip",
+    kinematicClassification: "Compound Push",
+    executionPosture: "Posterior Pelvic Tilt / Contracted Abdomen",
+    requiresHandoff: false,
     category: "Upper Body - Push",
     baseMale: 70,
     baseFemale: 40,
@@ -435,6 +470,9 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "chest_flye": {
     id: "chest_flye",
     name: "Chest Flye",
+    kinematicClassification: "Simple Push",
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    requiresHandoff: false,
     category: "Upper Body - Push",
     baseMale: 50,
     baseFemale: 30,
@@ -479,6 +517,9 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "triceps_extension": {
     id: "triceps_extension",
     name: "Triceps Extension",
+    kinematicClassification: "Simple Push",
+    executionPosture: "Posterior Pelvic Tilt / Contracted Abdomen",
+    requiresHandoff: false,
     category: "Upper Body - Push",
     baseMale: 40,
     baseFemale: 25,
@@ -521,6 +562,9 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "lateral_raise": {
     id: "lateral_raise",
     name: "Lateral Raise",
+    kinematicClassification: "Simple Push",
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    requiresHandoff: false,
     category: "Upper Body - Push",
     baseMale: 30,
     baseFemale: 15,
@@ -532,6 +576,10 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "compound_row": {
     id: "compound_row",
     name: "Compound Row",
+    kinematicClassification: "Compound Pull",
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    requiresHandoff: true,
+    sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."],
     category: "Upper Body - Pull",
     baseMale: 80,
     baseFemale: 40,
@@ -581,6 +629,11 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "pulldown": {
     id: "pulldown",
     name: "Pulldown (Torso Arm)",
+    kinematicClassification: "Compound Pull",
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    requiresHandoff: true,
+    setupGap: "Gap 2",
+    sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."],
     category: "Upper Body - Pull",
     baseMale: 70,
     baseFemale: 50,
@@ -631,6 +684,10 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "pullover": {
     id: "pullover",
     name: "Pullover",
+    kinematicClassification: "Simple Pull",
+    executionPosture: "Posterior Pelvic Tilt / Contracted Abdomen",
+    requiresHandoff: true,
+    sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."],
     category: "Upper Body - Pull",
     baseMale: 60,
     baseFemale: 40,
@@ -680,6 +737,10 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "simple_row": {
     id: "simple_row",
     name: "Simple Row",
+    kinematicClassification: "Simple Pull",
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    requiresHandoff: false,
+    sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."],
     category: "Upper Body - Pull",
     baseMale: 60,
     baseFemale: 40,
@@ -727,6 +788,10 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "biceps_curl": {
     id: "biceps_curl",
     name: "Biceps Curl",
+    kinematicClassification: "Simple Pull",
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    requiresHandoff: false,
+    sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."],
     category: "Upper Body - Pull",
     baseMale: 40,
     baseFemale: 20,
@@ -770,6 +835,11 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "lumbar_extension": {
     id: "lumbar_extension",
     name: "Lumbar Extension",
+    kinematicClassification: "Simple Pull",
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    requiresHandoff: false,
+    setupGap: "Gap 4-6",
+    sequencingContraindications: ["Do not pair immediately before Leg Press or Leg Curl (lumbar pump exacerbation).","Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."],
     category: "Trunk/Spine/Core",
     baseMale: 40,
     baseFemale: 30,
@@ -819,6 +889,9 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "abdominals": {
     id: "abdominals",
     name: "Abdominals",
+    kinematicClassification: "Simple Push",
+    executionPosture: "Posterior Pelvic Tilt / Contracted Abdomen",
+    requiresHandoff: true,
     category: "Trunk/Spine/Core",
     baseMale: 50,
     baseFemale: 30,
@@ -870,6 +943,9 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "torso_rotation": {
     id: "torso_rotation",
     name: "Torso Rotation",
+    kinematicClassification: "Simple Rotary",
+    executionPosture: "Posterior Pelvic Tilt / Contracted Abdomen",
+    requiresHandoff: false,
     category: "Trunk/Spine/Core",
     baseMale: 40,
     baseFemale: 30,
@@ -916,6 +992,10 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "cervical_extension": {
     id: "cervical_extension",
     name: "Cervical Extension",
+    kinematicClassification: "Simple Pull",
+    executionPosture: "Chest Up / Anterior Pelvic Tilt",
+    requiresHandoff: true,
+    sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."],
     category: "Trunk/Spine/Core",
     baseMale: 30,
     baseFemale: 20,
