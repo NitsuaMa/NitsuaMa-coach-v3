@@ -2,9 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { UserPlus, Loader2, Info, CheckCircle2, FileUp, AlertTriangle } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
+import { UserPlus, Loader2, CheckCircle2, FileUp, AlertTriangle } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
@@ -12,7 +10,6 @@ import { db } from '../firebase';
 import { Client } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 import { cn } from '@/lib/utils';
-import { OccupationSelect } from './OccupationSelect';
 
 interface CreateClientModalProps {
   clients: Client[];
@@ -21,50 +18,20 @@ interface CreateClientModalProps {
   onClientCreated: (clientId: string, routeToImporter?: boolean) => void;
 }
 
-const ORTHO_FLAGS = [
-  "Lumbar/Spine", 
-  "Cardiac", 
-  "Osteoarthritis", 
-  "Shoulder/Rotator", 
-  "Knee/Hip Replacement", 
-  "Hypertension", 
-  "Diabetes", 
-  "Osteoporosis"
-];
-
 export function CreateClientModal({ clients, initialName = '', onClose, onClientCreated }: CreateClientModalProps) {
   const nameParts = initialName.trim().split(' ');
   const [firstName, setFirstName] = useState(nameParts[0] || '');
   const [lastName, setLastName] = useState(nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [discoveryNotes, setDiscoveryNotes] = useState('');
+  
   const [activeTab, setActiveTab] = useState<'prospect' | 'existing'>('prospect');
-  
-  // Custom Fields
-  const [leadSource, setLeadSource] = useState('Referral');
-  const [referredBy, setReferredBy] = useState('');
-  
-  // Expanded Clinical Schema
-  const [occupation, setOccupation] = useState('');
-  const [isRetired, setIsRetired] = useState(false);
-  const [activityLevel, setActivityLevel] = useState<any>('');
-  const [recoveryMetric, setRecoveryMetric] = useState<any>('');
-  const [trainingPedigree, setTrainingPedigree] = useState<any>('');
-  const [clinicalProfile, setClinicalProfile] = useState<string[]>([]);
-  const [clinicalNotes, setClinicalNotes] = useState('');
-  
-  // Migration Fields
   const [routeToImporter, setRouteToImporter] = useState(true);
   
   // Submission & Validation States
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<Client | null>(null);
-
-  const toggleClinicalFlag = (flag: string) => {
-    setClinicalProfile(prev => 
-      prev.includes(flag) ? prev.filter(f => f !== flag) : [...prev, flag]
-    );
-  };
 
   const executeSave = async (force: boolean = false) => {
     if (!firstName || !lastName) return;
@@ -83,31 +50,21 @@ export function CreateClientModal({ clients, initialName = '', onClose, onClient
     setIsSubmitting(true);
     
     try {
-      const clientData: any = {
+      const clientData = {
         firstName,
         lastName,
         phone,
         email,
+        discoveryNotes, // Stage 1 Notes
         isActive: true,
         completedSessions: 0,
         sessionCount: 0,
         remainingSessions: activeTab === 'prospect' ? 1 : 10,
-        gender: "Male" as "Male",
-        height: "5'10\"",
+        gender: "Male" as "Male", // Default, to be updated in Stage 2
+        height: "5'10\"", // Default, to be updated in Stage 2
         consultationCompleted: activeTab === 'existing',
         requiresConsultation: activeTab === 'prospect',
-        leadSource,
-        referredBy,
-        occupation,
-        isRetired,
-        clinicalProfile,
-        clinicalNotes
       };
-      
-      // Only include optional fields if they have values to avoid 'undefined' errors
-      if (activityLevel) clientData.activityLevel = activityLevel;
-      if (recoveryMetric) clientData.recoveryMetric = recoveryMetric;
-      if (trainingPedigree) clientData.trainingPedigree = trainingPedigree;
       
       const docRef = await addDoc(collection(db, 'clients'), {
         ...clientData,
@@ -128,7 +85,7 @@ export function CreateClientModal({ clients, initialName = '', onClose, onClient
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4 sm:p-6 bg-slate-950/90 backdrop-blur-md">
-      <Card className="w-full max-w-3xl bg-slate-900 border border-slate-700 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col max-h-[95vh] rounded-[32px] overflow-hidden relative">
+      <Card className="w-full max-w-2xl bg-slate-900 border border-slate-700 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col max-h-[95vh] rounded-[32px] overflow-hidden relative">
         
         {duplicateWarning && (
           <div className="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-6">
@@ -141,7 +98,7 @@ export function CreateClientModal({ clients, initialName = '', onClose, onClient
                 <div>
                   <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2">Duplicate Found</h3>
                   <p className="text-slate-400 font-medium text-sm leading-relaxed">
-                    A client named <span className="text-white font-bold">{duplicateWarning.firstName} {duplicateWarning.lastName}</span> already exists in the system. Are you sure you want to create a duplicate profile?
+                    A client named <span className="text-white font-bold">{duplicateWarning.firstName} {duplicateWarning.lastName}</span> already exists. Are you sure you want to create a duplicate profile?
                   </p>
                 </div>
                 <div className="flex gap-4 w-full mt-4">
@@ -161,7 +118,7 @@ export function CreateClientModal({ clients, initialName = '', onClose, onClient
                     className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-900 font-black uppercase tracking-wider"
                     onClick={() => executeSave(true)}
                   >
-                    Force Create Duplicate
+                    Force Create
                   </Button>
                 </div>
               </div>
@@ -198,9 +155,9 @@ export function CreateClientModal({ clients, initialName = '', onClose, onClient
 
         <CardContent className="flex-1 p-8 space-y-8 overflow-y-auto custom-scrollbar bg-slate-900">
           
-          {/* Identity Group */}
+          {/* Stage 1: Identity & Contact */}
           <div className="space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-[#F06C22] border-b border-slate-800 pb-2">Client Identity</h3>
+            <h3 className="text-xs font-black uppercase tracking-widest text-[#F06C22] border-b border-slate-800 pb-2">Step 1: Contact Information</h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">First Name</Label>
@@ -222,14 +179,6 @@ export function CreateClientModal({ clients, initialName = '', onClose, onClient
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Email (Optional)</Label>
-                <Input 
-                  value={email} onChange={e => setEmail(e.target.value)}
-                  className="h-12 bg-slate-800 border-slate-700 text-white placeholder:text-slate-600 focus:border-[#F06C22] rounded-xl font-bold"
-                  placeholder="name@email.com" type="email"
-                />
-              </div>
-              <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Phone</Label>
                 <Input 
                   value={phone} onChange={e => setPhone(e.target.value)}
@@ -237,137 +186,32 @@ export function CreateClientModal({ clients, initialName = '', onClose, onClient
                   placeholder="555-555-5555" type="tel"
                 />
               </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Lead Source</Label>
-                <Select value={leadSource} onValueChange={setLeadSource}>
-                  <SelectTrigger className="h-12 bg-slate-800 border-slate-700 text-white font-bold rounded-xl">
-                    <SelectValue placeholder="How did they hear about us?" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-800 text-white rounded-xl">
-                    <SelectItem value="Referral">Referral / Word of Mouth</SelectItem>
-                    <SelectItem value="Web Search">Google / Web Search</SelectItem>
-                    <SelectItem value="Social Media">Social Media (FB/IG)</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Referred By (Optional)</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Email (Optional)</Label>
                 <Input 
-                  value={referredBy} onChange={e => setReferredBy(e.target.value)}
+                  value={email} onChange={e => setEmail(e.target.value)}
                   className="h-12 bg-slate-800 border-slate-700 text-white placeholder:text-slate-600 focus:border-[#F06C22] rounded-xl font-bold"
-                  placeholder="Client Name"
+                  placeholder="name@email.com" type="email"
                 />
               </div>
             </div>
           </div>
 
-          {/* Clinical Demographic Group */}
+          {/* Discovery Notes */}
           <div className="space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-[#F06C22] border-b border-slate-800 pb-2">Clinical Demographics</h3>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Occupation</Label>
-                  <div className="flex items-center space-x-2 mr-1">
-                    <Checkbox id="retired" checked={isRetired} onCheckedChange={(v) => setIsRetired(!!v)} className="w-3.5 h-3.5" />
-                    <label htmlFor="retired" className="text-[10px] font-bold text-slate-400 cursor-pointer">Unemployed/Retired</label>
-                  </div>
-                </div>
-                <OccupationSelect 
-                  value={occupation} 
-                  onChange={setOccupation} 
-                  disabled={isRetired}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Activity Level</Label>
-                <Select value={activityLevel} onValueChange={setActivityLevel}>
-                  <SelectTrigger className="h-12 bg-slate-800 border-slate-700 text-white font-bold rounded-xl">
-                    <SelectValue placeholder="Select Lifestyle" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-800 text-white rounded-xl">
-                    <SelectItem value="Sedentary">Sedentary (Desk/Office)</SelectItem>
-                    <SelectItem value="Light">Light (Walking/Standing)</SelectItem>
-                    <SelectItem value="Moderate">Moderate (Active Hobbies)</SelectItem>
-                    <SelectItem value="High">High (Competitive/Athletic)</SelectItem>
-                    <SelectItem value="Manual Labor">Manual Labor (Heavy lifting)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Training Pedigree</Label>
-                <Select value={trainingPedigree} onValueChange={setTrainingPedigree}>
-                  <SelectTrigger className="h-12 bg-slate-800 border-slate-700 text-white font-bold rounded-xl">
-                    <SelectValue placeholder="Experience Level" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-800 text-white rounded-xl">
-                    <SelectItem value="Novice">Novice (Little to no lifting)</SelectItem>
-                    <SelectItem value="Intermediate">Intermediate (Casual gym-goer)</SelectItem>
-                    <SelectItem value="Advanced">Advanced (Prior bodybuilding/powerlifting)</SelectItem>
-                    <SelectItem value="Protocol Veteran">Protocol Veteran (Prior HIT training)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Baseline Recovery Capacity</Label>
-                <Select value={recoveryMetric} onValueChange={setRecoveryMetric}>
-                  <SelectTrigger className="h-12 bg-slate-800 border-slate-700 text-white font-bold rounded-xl">
-                    <SelectValue placeholder="Select Recovery Metric" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-800 text-white rounded-xl">
-                    <SelectItem value="Poor">Poor (High stress, bad sleep)</SelectItem>
-                    <SelectItem value="Average">Average (Normal stress, adequate sleep)</SelectItem>
-                    <SelectItem value="Optimal">Optimal (Low stress, excellent sleep)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          {/* Orthopedic Group */}
-          <div className="space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-[#F06C22] border-b border-slate-800 pb-2">Medical & Orthopedic</h3>
-            
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {ORTHO_FLAGS.map(flag => (
-                <div 
-                  key={flag}
-                  onClick={() => toggleClinicalFlag(flag)}
-                  className={cn(
-                    "p-3 rounded-xl border flex items-center gap-2 cursor-pointer transition-colors user-select-none",
-                    clinicalProfile.includes(flag) 
-                      ? "bg-[#F06C22]/10 border-[#F06C22] text-[#F06C22]" 
-                      : "bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700"
-                  )}
-                >
-                  <Checkbox 
-                    checked={clinicalProfile.includes(flag)}
-                    className={cn("pointer-events-none data-[state=checked]:bg-[#F06C22] data-[state=checked]:border-[#F06C22]")}
-                  />
-                  <span className="text-xs font-bold leading-tight">{flag}</span>
-                </div>
-              ))}
-            </div>
-
+            <h3 className="text-xs font-black uppercase tracking-widest text-[#F06C22] border-b border-slate-800 pb-2">Discovery Notes</h3>
             <div className="space-y-2 mt-4">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Clinical Notes & Exceptions</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Initial Context & Questions</Label>
               <Textarea 
-                value={clinicalNotes}
-                onChange={e => setClinicalNotes(e.target.value)}
-                placeholder="Include details about the injuries, recent surgeries, medications, or specific modifications required..."
-                className="min-h-[100px] bg-slate-800 border-slate-700 text-white rounded-xl font-medium placeholder:text-slate-600 focus:border-[#F06C22] resize-none"
+                value={discoveryNotes}
+                onChange={e => setDiscoveryNotes(e.target.value)}
+                placeholder="Why are they coming in? What are their initial questions or concerns? Jot down quick notes to reference during the Stage 2 consultation..."
+                className="min-h-[120px] bg-slate-800 border-slate-700 text-white rounded-xl font-medium placeholder:text-slate-600 focus:border-[#F06C22] resize-none"
               />
             </div>
           </div>
 
+          {/* Migration Tools (Existing Only) */}
           {activeTab === 'existing' && (
             <div className="space-y-4">
                <h3 className="text-xs font-black uppercase tracking-widest text-[#F06C22] border-b border-slate-800 pb-2">Migration Protocol</h3>
@@ -387,7 +231,7 @@ export function CreateClientModal({ clients, initialName = '', onClose, onClient
                     {routeToImporter && <CheckCircle2 className="w-4 h-4 text-slate-900" />}
                   </div>
                   <div className="flex flex-col">
-                    <p className={cn("text-[15px] font-black uppercase tracking-tight", routeToImporter ? 'text-[#F06C22]' : 'text-slate-300')}>Route to FileMaker Importer</p>
+                    <p className={cn("text-[15px] font-black uppercase tracking-tight", routeToImporter ? 'text-[#F06C22]' : 'text-slate-300')}>Route to Legacy Chart Importer</p>
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Send immediately to historical data ingestion after creation.</p>
                   </div>
                 </div>
@@ -414,7 +258,7 @@ export function CreateClientModal({ clients, initialName = '', onClose, onClient
             ) : (
               <span className="flex items-center gap-2">
                 {activeTab === 'prospect' ? <UserPlus className="w-4 h-4" /> : <FileUp className="w-4 h-4" />}
-                {activeTab === 'prospect' ? 'Create Prospect Profile' : 'Initialize Migration Profile'}
+                {activeTab === 'prospect' ? 'Create Contact & Proceed to Stage 2' : 'Initialize Migration Profile'}
               </span>
             )}
           </Button>
@@ -423,4 +267,3 @@ export function CreateClientModal({ clients, initialName = '', onClose, onClient
     </div>
   );
 }
-

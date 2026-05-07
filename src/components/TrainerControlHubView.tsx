@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Upload, CheckCircle2, AlertCircle, Loader2, Database, Link, RefreshCcw, ShieldCheck, LogOut, Plus, Trash2, Shield, Settings2, Building2, HardDrive, Lock, ShieldAlert, MonitorPlay, Trash, UserCog, TrendingUp } from 'lucide-react';
+import { Upload, CheckCircle2, AlertCircle, Loader2, Database, Link, RefreshCcw, ShieldCheck, LogOut, Plus, Trash2, Shield, Settings2, Building2, HardDrive, Lock, ShieldAlert, MonitorPlay, Trash, UserCog, TrendingUp, Trophy } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
@@ -442,6 +442,15 @@ export function TrainerControlHubView({
         </div>
         
         <div className="flex gap-2">
+          {isAdmin && setView && (
+            <Button 
+              onClick={() => setView('leaderboard')}
+              className="rounded-2xl bg-[#0A2E46] text-[#F06C22] border border-[#F06C22]/30 hover:bg-[#F06C22] hover:text-white h-12 px-6 font-black uppercase text-[10px] tracking-widest shadow-[0_0_15px_rgba(240,108,34,0.2)]"
+            >
+              <Trophy className="w-4 h-4 mr-2" />
+              Elite Leaderboard
+            </Button>
+          )}
           {isAdmin && setView && (
             <Button 
               onClick={() => setView('dashboard')}

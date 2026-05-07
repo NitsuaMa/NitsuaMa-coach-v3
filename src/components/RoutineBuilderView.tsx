@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+const DraggableAny = Draggable as any;
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -164,8 +165,8 @@ export function RoutineBuilderView({ client, onSaveRoutine, onBack }: RoutineBui
                 {(provided) => (
                   <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
                     {MACHINE_LIST.filter(m => !selectedSequence.includes(m.id)).map((machine, index) => (
-                      <Draggable key={`pool-${machine.id}`} draggableId={`pool-${machine.id}`} index={index}>
-                        {(provided, snapshot) => (
+                      <DraggableAny key={`pool-${machine.id}`} draggableId={`pool-${machine.id}`} index={index}>
+                        {(provided: any, snapshot: any) => (
                           <div
                             ref={provided.innerRef}
                             {...provided.draggableProps}
@@ -181,7 +182,7 @@ export function RoutineBuilderView({ client, onSaveRoutine, onBack }: RoutineBui
                             </Button>
                           </div>
                         )}
-                      </Draggable>
+                      </DraggableAny>
                     ))}
                     {provided.placeholder}
                   </div>
@@ -239,8 +240,8 @@ export function RoutineBuilderView({ client, onSaveRoutine, onBack }: RoutineBui
                         const isErrorTarget = violations.some(v => v.indices?.includes(index) && v.severity === 'error');
 
                         return (
-                          <Draggable key={`seq-${machineId}-${index}`} draggableId={machineId} index={index}>
-                            {(provided, snapshot) => (
+                          <DraggableAny key={`seq-${machineId}-${index}`} draggableId={machineId} index={index}>
+                            {(provided: any, snapshot: any) => (
                               <div
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
@@ -291,12 +292,12 @@ export function RoutineBuilderView({ client, onSaveRoutine, onBack }: RoutineBui
                                      </div>
                                   </AccordionContent>
                                 </AccordionItem>
-                              </div>
-                            )}
-                          </Draggable>
-                        );
-                      })}
-                    </Accordion>
+                                </div>
+                              )}
+                            </DraggableAny>
+                          );
+                       })}
+                     </Accordion>
                     {provided.placeholder}
                   </div>
                 )}

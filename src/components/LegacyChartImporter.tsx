@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Upload, 
   X, 
-  Scan, 
+  Maximize, 
   CheckCircle2, 
   AlertTriangle, 
   History, 
@@ -396,7 +396,7 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white flex items-center gap-2">
-            <Scan className="w-8 h-8 text-[#F06C22]" />
+            <Maximize className="w-8 h-8 text-[#F06C22]" />
             OCR Legacy Pipeline
           </h1>
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">
@@ -524,7 +524,7 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
                         onClick={runOCR}
                         disabled={isScanning || !selectedClientId || expectedSessions <= 0}
                       >
-                        <Scan className={cn("w-4 h-4 mr-2", isScanning && "animate-spin")} />
+                        <Maximize className={cn("w-4 h-4 mr-2", isScanning && "animate-spin")} />
                         {isScanning ? 'SCANNING GRID...' : 'FULL CLINICAL EXTRACTION'}
                       </Button>
 
@@ -590,7 +590,7 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
                         <div className="relative">
                           <div className="w-24 h-24 rounded-full border-4 border-[#0A2E46] border-t-[#F06C22] animate-spin"></div>
                           <div className="absolute inset-0 flex items-center justify-center">
-                            <Scan className="w-10 h-10 text-[#F06C22]" />
+                            <Maximize className="w-10 h-10 text-[#F06C22]" />
                           </div>
                         </div>
                         <div className="space-y-2">

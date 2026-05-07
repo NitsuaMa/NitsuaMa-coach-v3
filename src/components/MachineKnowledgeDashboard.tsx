@@ -5,7 +5,24 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { PlayCircle, X, ChevronRight, Activity, Users, TrendingUp, Hand, Wand2, Loader2, CheckCircle, Target, ShieldCheck, Settings2, UserCog, Zap } from 'lucide-react';
+import { 
+  PlayCircle, 
+  X, 
+  ChevronRight, 
+  Activity, 
+  Users, 
+  TrendingUp, 
+  Hand, 
+  Wand2, 
+  Loader2, 
+  CheckCircle, 
+  Target, 
+  ShieldCheck, 
+  Settings2, 
+  UserCog, 
+  Zap,
+  Trophy
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
 
@@ -18,7 +35,7 @@ const CATEGORIES = [
   "Trunk/Spine/Core"
 ];
 
-export function MachineKnowledgeDashboard() {
+export function MachineKnowledgeDashboard({ setView }: { setView: (view: any) => void }) {
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [activeMachineId, setActiveMachineId] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -103,15 +120,26 @@ export function MachineKnowledgeDashboard() {
             Equipment Arsenal
           </h1>
           
-          <Dialog open={isWizardOpen} onOpenChange={setIsWizardOpen}>
-            <DialogTrigger render={
-              <Button className="bg-gradient-to-r from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white font-black uppercase tracking-widest text-[10px] md:text-xs">
-                <Wand2 className="w-4 h-4 mr-2" />
-                AI Setup Wizard
-              </Button>
-            } />
-            <DialogContent className="sm:max-w-[600px] bg-[#0A2E46] text-white border-slate-700">
-              <DialogHeader>
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={() => setView('leaderboard')}
+              className="bg-gradient-to-r from-amber-500 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-white font-black uppercase tracking-widest text-[10px] md:text-xs"
+            >
+              <Trophy className="w-4 h-4 mr-2" />
+              Machine Leaderboard
+            </Button>
+
+            <Dialog open={isWizardOpen} onOpenChange={setIsWizardOpen}>
+              <DialogTrigger 
+                render={
+                  <Button className="bg-gradient-to-r from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white font-black uppercase tracking-widest text-[10px] md:text-xs">
+                    <Wand2 className="w-4 h-4 mr-2" />
+                    AI Setup Wizard
+                  </Button>
+                }
+              />
+              <DialogContent className="sm:max-w-[600px] bg-[#0A2E46] text-white border-slate-700">
+                <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-xl font-black uppercase tracking-widest">
                   <Wand2 className="w-5 h-5 text-emerald-400" />
                   AI Setup Wizard
@@ -203,8 +231,9 @@ export function MachineKnowledgeDashboard() {
             </DialogContent>
           </Dialog>
         </div>
-        
-        {/* Stationary Filter Tabs */}
+      </div>
+      
+      {/* Stationary Filter Tabs */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 w-full max-w-5xl">
           {CATEGORIES.map(cat => (
             <button

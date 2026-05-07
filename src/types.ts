@@ -31,6 +31,18 @@ export interface ClientEvent {
   createdAt?: any;
 }
 
+export interface ClinicalSafetyFlag {
+  id: string;
+  category: string;
+  conditionName: string;
+  severity: string;
+  protocolHandling: {
+    instruction: string;
+    affectedMachineIds: string[];
+    setupModification?: string;
+  }[];
+}
+
 export interface Client {
   id?: string;
   mindbodyId?: string;
@@ -50,6 +62,7 @@ export interface Client {
   occupation?: string;
   isRetired?: boolean;
   clinicalProfile?: string[];
+  clinicalFlags?: string[];
   clinicalNotes?: string;
   activityLevel?: 'Sedentary' | 'Light' | 'Moderate' | 'High' | 'Manual Labor';
   trainingPedigree?: 'Novice' | 'Intermediate' | 'Advanced' | 'Protocol Veteran';
@@ -70,6 +83,7 @@ export interface Client {
   packageTier?: "6-Month" | "12-Month" | "18-Month" | "None";
   consultationCompleted?: boolean;
   requiresConsultation?: boolean;
+  discoveryNotes?: string;
   createdAt?: any;
 }
 
@@ -79,11 +93,11 @@ export interface Machine {
   fullName?: string;
   settings?: string; // Repurposed as "Standard Setup Tips"
   settingOptions?: string[]; // e.g. ["Seat", "Pads", "Backrest"]
-  order: number;
+  order?: number;
   imageUrl?: string;
   anatomicalRegion?: string;
   kinematicClassification?: string;
-  targetMuscles?: string; // Muscle group names or short desc
+  targetMuscles?: string | string[]; // Muscle group names or short desc
   primaryMuscles?: string[];
   targetMusculature?: string[];
   synergists?: string[];
@@ -370,4 +384,4 @@ export interface TrainerFocus {
   updatedAt: any;
 }
 
-export type View = 'trainers' | 'clients' | 'machines' | 'workouts' | 'history' | 'calendar' | 'trainer-hub' | 'dashboard' | 'profile' | 'chart' | 'trainer-profile' | 'progress-report' | 'consultation-wizard' | 'machine-knowledge' | 'client-directory' | 'chart-importer';
+export type View = 'trainers' | 'clients' | 'machines' | 'workouts' | 'history' | 'calendar' | 'trainer-hub' | 'dashboard' | 'profile' | 'chart' | 'trainer-profile' | 'progress-report' | 'consultation-wizard' | 'machine-knowledge' | 'client-directory' | 'chart-importer' | 'leaderboard';

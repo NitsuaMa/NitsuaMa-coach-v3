@@ -33,7 +33,7 @@ import {
   AlertCircle,
   Play,
   History,
-  Scan,
+  Maximize,
   Maximize2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -82,6 +82,7 @@ import {
   ScheduleEntry,
   ProgressReport,
   FocusRecord,
+  ClinicalSafetyFlag,
 } from "../types";
 import { OperationType, handleFirestoreError } from "../lib/firestore-errors";
 import { WorkoutChartGrid } from "./WorkoutChartGrid";
@@ -112,7 +113,7 @@ export function ClientProfileView({
   trainers: Trainer[];
   onDelete: (id: string) => void;
   onSelectReport: (id: string) => void;
-  setView: (v: View) => void;
+  setView: (v: View, data?: { isIntroSession?: boolean }) => void;
   hasQuotaError?: boolean;
   user?: any;
 }) {
@@ -149,6 +150,12 @@ export function ClientProfileView({
   const [historyPage, setHistoryPage] = useState(0);
   const [showFullChart, setShowFullChart] = useState(false);
   const [sessionLimit, setSessionLimit] = useState(10);
+  useEffect(() => {
+    const handleOpenImport = () => setView("chart-importer" as any);
+    window.addEventListener('open-bulk-import', handleOpenImport);
+    return () => window.removeEventListener('open-bulk-import', handleOpenImport);
+  }, []);
+
   const [activeTab, setActiveTab] = useState("overview");
   const [infoForm, setInfoForm] = useState<Partial<Client>>({});
   const [newEventForm, setNewEventForm] = useState<{
@@ -204,6 +211,7 @@ export function ClientProfileView({
         isActive: client.isActive ?? true,
         isRoutineBActive: client.isRoutineBActive ?? false,
         consultationCompleted: client.consultationCompleted ?? false,
+        discoveryNotes: client.discoveryNotes || "",
         packageTier: client.packageTier || "None",
         remainingSessions: client.remainingSessions ?? 0,
       });
@@ -683,6 +691,34 @@ export function ClientProfileView({
     >
       {/* Alerts / Notifications */}
       {(() => {
+        if (client.requiresConsultation && !client.consultationCompleted) {
+          return (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              className="mb-2"
+            >
+              <div className="bg-[#F06C22]/10 border-2 border-[#F06C22]/20 rounded-3xl p-4 flex items-center gap-4 text-[#F06C22]">
+                <AlertCircle className="w-6 h-6 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-xs font-black uppercase tracking-tight">
+                    Discovery Consultation Pending (Stage 2)
+                  </p>
+                  <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest">
+                    Complete clinical baseline and occupational matrix in the 'Details' tab.
+                  </p>
+                </div>
+                <Button
+                  className="bg-[#F06C22] hover:bg-[#F06C22]/90 text-white text-[10px] font-black uppercase rounded-xl h-9 px-4 shadow-lg shadow-[#F06C22]/20"
+                  onClick={() => setActiveTab("details")}
+                >
+                  Start Stage 2
+                </Button>
+              </div>
+            </motion.div>
+          );
+        }
+
         if (progressReports.length === 0) {
           // Only show "Report Required" if client is older than 3 months
           const clientCreatedAt =
@@ -1421,16 +1457,52 @@ export function ClientProfileView({
           )}
         </TabsContent>
 
-        <TabsContent value="history" className="h-[750px] relative">
-          {clientId && (
-            <ClientHistoryCalendar
-              clientId={clientId}
-              machines={machines}
-              trainers={trainers}
-              user={user}
-              allLogs={allLogs}
-            />
-          )}
+        <TabsContent value="history" className="h-[750px] relative pb-20 overflow-y-auto custom-scrollbar">
+          <div className="space-y-6">
+            {clientId && (
+              <ClientHistoryCalendar
+                clientId={clientId}
+                machines={machines}
+                trainers={trainers}
+                user={user}
+                allLogs={allLogs}
+              />
+            )}
+
+            <Card className="rounded-[40px] shadow-xl bg-[#0A2E46] border-[#115E8D]/30 text-white overflow-hidden max-w-2xl mx-auto">
+              <CardHeader className="p-6 border-b border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center">
+                    <Maximize className="w-5 h-5 text-[#38BDF8]" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg font-black uppercase italic tracking-tighter leading-tight">
+                      Data & Migration Tools
+                    </CardTitle>
+                    <CardDescription className="text-[9px] font-bold uppercase tracking-widest text-white/40">
+                      OCR & FileMaker Settings Import
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="flex flex-col md:flex-row gap-6 items-center">
+                  <div className="flex-1">
+                    <p className="text-[10px] text-white/60 font-medium leading-relaxed">
+                      Missing historical data? Use our OCR pipeline to import settings and session logs from legacy FileMaker charts or handwritten files.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => setView("chart-importer" as any)}
+                    className="w-full md:w-auto px-8 h-12 rounded-2xl bg-[#38BDF8] hover:bg-[#0ea5e9] text-white font-black uppercase italic tracking-widest text-[10px] transition-all shrink-0 shadow-lg shadow-[#38BDF8]/20"
+                  >
+                    <Maximize className="w-4 h-4 mr-2" />
+                    Open Migration Hub
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="reports">
@@ -1856,248 +1928,91 @@ export function ClientProfileView({
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="details">
+        </TabsContent>        <TabsContent value="details">
           <div className="grid gap-6 lg:grid-cols-2 mb-6">
+            {/* 1. The "Why" (Goals & Motivation) */}
             <Card className="rounded-[40px] shadow-xl bg-slate-800 border-slate-700 text-white">
               <CardHeader className="p-8 border-b border-slate-700">
                 <CardTitle className="text-xl font-black uppercase italic tracking-tighter">
-                  Vitals & Demographics
+                  The 'Why' (Goals & Motivation)
                 </CardTitle>
                 <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-[#38BDF8]">
-                  Identity & Vital Statistics
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-8 grid gap-6 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                    First Name
-                  </Label>
-                  <Input
-                    value={infoForm.firstName || ""}
-                    onChange={(e) =>
-                      setInfoForm((f) => ({ ...f, firstName: e.target.value }))
-                    }
-                    className="h-12 rounded-2xl font-black px-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8]"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                    Last Name
-                  </Label>
-                  <Input
-                    value={infoForm.lastName || ""}
-                    onChange={(e) =>
-                      setInfoForm((f) => ({ ...f, lastName: e.target.value }))
-                    }
-                    className="h-12 rounded-2xl font-black px-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8]"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                    Age
-                  </Label>
-                  <Input
-                    type="number"
-                    value={infoForm.age ?? ""}
-                    onChange={(e) =>
-                      setInfoForm((f) => ({
-                        ...f,
-                        age: e.target.value ? parseInt(e.target.value) : null,
-                      }))
-                    }
-                    className="h-12 rounded-2xl font-black px-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8]"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                    Gender
-                  </Label>
-                  <Select
-                    value={infoForm.gender || "Male"}
-                    onValueChange={(v) =>
-                      setInfoForm((f) => ({ ...f, gender: v as any }))
-                    }
-                  >
-                    <SelectTrigger className="h-12 rounded-2xl font-black px-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8]">
-                      <SelectValue placeholder="Select Gender" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700 text-white rounded-xl">
-                      <SelectItem value="Male">Male</SelectItem>
-                      <SelectItem value="Female">Female</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                    Height
-                  </Label>
-                  <Input
-                    value={infoForm.height || ""}
-                    onChange={(e) =>
-                      setInfoForm((f) => ({ ...f, height: e.target.value }))
-                    }
-                    className="h-12 rounded-2xl font-black px-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8]"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                    Current Weight (lbs)
-                  </Label>
-                  <Input
-                    value={infoForm.weight || ""}
-                    onChange={(e) =>
-                      setInfoForm((f) => ({ ...f, weight: e.target.value }))
-                    }
-                    className="h-12 rounded-2xl font-black px-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8]"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                    Occupation
-                  </Label>
-                  <OccupationSelect
-                    value={infoForm.occupation || ""}
-                    onChange={(v) =>
-                      setInfoForm((f) => ({ ...f, occupation: v }))
-                    }
-                    disabled={infoForm.isRetired}
-                  />
-                </div>
-                <div className="space-y-2 flex flex-col justify-center">
-                  <div className="flex items-center gap-4 mt-2">
-                    <Switch
-                      checked={infoForm.isRetired}
-                      onCheckedChange={(v) =>
-                        setInfoForm((f) => ({ ...f, isRetired: v }))
-                      }
-                      className="data-[state=checked]:bg-[#38BDF8]"
-                    />
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-300">
-                      Retired
-                    </Label>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-[40px] shadow-xl bg-slate-800 border-slate-700 text-white">
-              <CardHeader className="p-8 border-b border-slate-700">
-                <CardTitle className="text-xl font-black uppercase italic tracking-tighter">
-                  Clinical Profiles
-                </CardTitle>
-                <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-[#38BDF8]">
-                  Orthopedic & Safety Flags
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-8">
-                {(() => {
-                  // Group clinical flags by category
-                  const groupedFlags = CLINICAL_FLAGS_MATRIX.reduce((acc, flag) => {
-                    if (!acc[flag.category]) acc[flag.category] = [];
-                    acc[flag.category].push(flag);
-                    return acc;
-                  }, {} as Record<string, typeof CLINICAL_FLAGS_MATRIX>);
-                
-                  return (
-                    <>
-                      <Accordion type="multiple" className="w-full space-y-4">
-                        {Object.entries(groupedFlags).map(([category, flags]) => (
-                          <AccordionItem key={category} value={category} className="border-slate-700 bg-slate-900/50 rounded-xl px-4 py-2">
-                             <AccordionTrigger className="hover:no-underline text-slate-200 font-bold uppercase tracking-widest text-[11px]">
-                               {category}
-                             </AccordionTrigger>
-                             <AccordionContent className="pt-2 pb-4 space-y-3">
-                               {flags.map((flag) => {
-                                 const isChecked = infoForm.clinicalFlags?.includes(flag.id) || false;
-                                 return (
-                                   <label
-                                     key={flag.id}
-                                     className={`flex items-start gap-3 cursor-pointer group p-3 rounded-xl border-2 transition-all ${isChecked ? 'bg-[#38BDF8]/10 border-[#38BDF8]/30' : 'bg-slate-950/50 border-transparent hover:border-slate-700'}`}
-                                   >
-                                     <div className="relative flex items-center justify-center shrink-0 mt-0.5">
-                                       <input
-                                         type="checkbox"
-                                         className="peer appearance-none w-5 h-5 border-2 border-slate-600 rounded bg-slate-900 checked:bg-[#38BDF8] checked:border-[#38BDF8] transition-all cursor-pointer"
-                                         checked={isChecked}
-                                         onChange={(e) => {
-                                           const current = infoForm.clinicalFlags || [];
-                                           if (e.target.checked)
-                                             setInfoForm((f) => ({
-                                               ...f,
-                                               clinicalFlags: [...current, flag.id],
-                                             }));
-                                           else
-                                             setInfoForm((f) => ({
-                                               ...f,
-                                               clinicalFlags: current.filter((a) => a !== flag.id),
-                                             }));
-                                         }}
-                                       />
-                                       <div className="absolute inset-0 flex items-center justify-center opacity-0 peer-checked:opacity-100 pointer-events-none text-white">
-                                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
-                                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                         </svg>
-                                       </div>
-                                     </div>
-                                     <div className="flex flex-col space-y-1">
-                                       <div className="flex items-center gap-2 flex-wrap">
-                                          <span className={`text-sm font-bold leading-tight ${isChecked ? 'text-white' : 'text-slate-300 group-hover:text-slate-200'}`}>
-                                            {flag.conditionName}
-                                          </span>
-                                          <Badge variant="outline" className={`text-[9px] uppercase tracking-widest font-black leading-none py-1
-                                            ${flag.severity === 'Absolute Contraindication' ? 'border-rose-600 bg-rose-950/30 text-rose-400' :
-                                              flag.severity === 'High Risk' ? 'border-amber-500 bg-amber-950/30 text-amber-400' :
-                                              'border-blue-500 bg-blue-950/30 text-blue-400'}
-                                          `}>
-                                            {flag.severity}
-                                          </Badge>
-                                       </div>
-                                     </div>
-                                   </label>
-                                 );
-                               })}
-                             </AccordionContent>
-                          </AccordionItem>
-                        ))}
-                      </Accordion>
-                      <div className="mt-6 space-y-2 animate-in fade-in slide-in-from-top-2">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                          Other / Specific Ailments
-                        </Label>
-                        <Textarea
-                          value={infoForm.clinicalNotes || ""}
-                          onChange={(e) =>
-                            setInfoForm((f) => ({
-                              ...f,
-                              clinicalNotes: e.target.value,
-                            }))
-                          }
-                          className="min-h-[80px] rounded-2xl font-bold p-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8] transition-all"
-                          placeholder="Specify any other conditions..."
-                        />
-                      </div>
-                    </>
-                  );
-                })()}
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-[40px] shadow-xl bg-slate-800 border-slate-700 text-white">
-              <CardHeader className="p-8 border-b border-slate-700">
-                <CardTitle className="text-xl font-black uppercase italic tracking-tighter">
-                  Lifestyle & Recovery
-                </CardTitle>
-                <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-[#38BDF8]">
-                  Daily External Stressors
+                  Discovery & Intent Path
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-8 space-y-6">
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                    Activity Level
+                    Discovery Notes (Stage 1)
+                  </Label>
+                  <Textarea
+                    value={infoForm.discoveryNotes || ""}
+                    onChange={(e) =>
+                      setInfoForm((f) => ({ ...f, discoveryNotes: e.target.value }))
+                    }
+                    className="min-h-[100px] rounded-2xl font-bold p-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8] resize-none"
+                    placeholder="Context from initial contact..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                    Primary Training Goals & Deep Intent
+                  </Label>
+                  <Textarea
+                    value={infoForm.globalNotes || ""}
+                    onChange={(e) =>
+                      setInfoForm((f) => ({ ...f, globalNotes: e.target.value }))
+                    }
+                    className="min-h-[140px] rounded-2xl font-bold p-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8]"
+                    placeholder="What are we really solving for? (e.g. 'I want to be able to pick up my grandkids without back pain')..."
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 2. Lifestyle & Environment */}
+            <Card className="rounded-[40px] shadow-xl bg-slate-800 border-slate-700 text-white">
+              <CardHeader className="p-8 border-b border-slate-700">
+                <CardTitle className="text-xl font-black uppercase italic tracking-tighter">
+                  Lifestyle & Environment
+                </CardTitle>
+                <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-[#38BDF8]">
+                  External Stressors & Physical Context
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-8 space-y-6">
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                      Occupation
+                    </Label>
+                    <OccupationSelect
+                      value={infoForm.occupation || ""}
+                      onChange={(v) =>
+                        setInfoForm((f) => ({ ...f, occupation: v }))
+                      }
+                      disabled={infoForm.isRetired}
+                    />
+                  </div>
+                  <div className="space-y-2 flex flex-col justify-center">
+                    <div className="flex items-center gap-4 mt-2">
+                      <Switch
+                        checked={infoForm.isRetired}
+                        onCheckedChange={(v) =>
+                          setInfoForm((f) => ({ ...f, isRetired: v }))
+                        }
+                        className="data-[state=checked]:bg-[#38BDF8]"
+                      />
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-300">
+                        Retired
+                      </Label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                    Daily Activity Level
                   </Label>
                   <Select
                     value={infoForm.activityLevel || "Moderate"}
@@ -2117,6 +2032,7 @@ export function ClientProfileView({
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
                     Systemic Recovery (Sleep/Stress)
@@ -2137,19 +2053,7 @@ export function ClientProfileView({
                     </SelectContent>
                   </Select>
                 </div>
-              </CardContent>
-            </Card>
 
-            <Card className="rounded-[40px] shadow-xl bg-slate-800 border-slate-700 text-white">
-              <CardHeader className="p-8 border-b border-slate-700">
-                <CardTitle className="text-xl font-black uppercase italic tracking-tighter">
-                  Training Pedigree
-                </CardTitle>
-                <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-[#38BDF8]">
-                  Prior Lifting Experience
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-8">
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
                     Experience Level
@@ -2164,37 +2068,149 @@ export function ClientProfileView({
                       <SelectValue placeholder="Select Experience" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700 text-white rounded-xl">
-                      <SelectItem value="Novice">
-                        Novice (No lifting experience)
-                      </SelectItem>
-                      <SelectItem value="Intermediate">
-                        Intermediate (Standard gym experience)
-                      </SelectItem>
-                      <SelectItem value="Advanced">
-                        Advanced (Extensive free weights/machines)
-                      </SelectItem>
-                      <SelectItem value="Protocol Veteran">
-                        Protocol Veteran (High-intensity/controlled protocols)
-                      </SelectItem>
+                      <SelectItem value="Novice">Novice (No lifting experience)</SelectItem>
+                      <SelectItem value="Intermediate">Intermediate (Standard gym experience)</SelectItem>
+                      <SelectItem value="Advanced">Advanced (Extensive free weights/machines)</SelectItem>
+                      <SelectItem value="Protocol Veteran">Protocol Veteran (Prior high-intensity experience)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </CardContent>
             </Card>
-          </div>
 
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="rounded-[40px] shadow-xl bg-slate-800 border-slate-700 text-white">
-                <CardHeader className="p-8 border-b border-slate-700">
-                  <CardTitle className="text-xl font-black uppercase italic tracking-tighter">
-                    Contact & Package
-                  </CardTitle>
-                  <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-[#38BDF8]">
-                    Communication & Account Standing
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-8 grid gap-6 sm:grid-cols-2">
+            {/* 3. The Clinical Baseline (Medical) */}
+            <Card className="rounded-[40px] shadow-xl bg-slate-800 border-slate-700 text-white lg:col-span-2">
+              <CardHeader className="p-8 border-b border-slate-700">
+                <CardTitle className="text-xl font-black uppercase italic tracking-tighter">
+                  The Clinical Baseline (Medical)
+                </CardTitle>
+                <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-[#38BDF8]">
+                  Orthopedic & Safety Flags
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-8">
+                {(() => {
+                  // Group clinical flags by category
+                  const groupedFlags = CLINICAL_FLAGS_MATRIX.reduce((acc, flag) => {
+                    if (!acc[flag.category]) acc[flag.category] = [];
+                    acc[flag.category].push(flag);
+                    return acc;
+                  }, {} as Record<string, typeof CLINICAL_FLAGS_MATRIX>);
+                
+                  return (
+                    <div className="grid lg:grid-cols-2 gap-8">
+                      <div className="space-y-4">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                          Select Pertinent Health Flags
+                        </Label>
+                        <Accordion type="multiple" className="w-full space-y-4">
+                          {Object.entries(groupedFlags).map(([category, flags]) => (
+                            <AccordionItem key={category} value={category} className="border-slate-700 bg-slate-900/50 rounded-xl px-4 py-1">
+                               <AccordionTrigger className="hover:no-underline text-slate-200 font-bold uppercase tracking-widest text-[10px] py-3">
+                                 {category}
+                               </AccordionTrigger>
+                               <AccordionContent className="pt-2 pb-4 space-y-2">
+                                 {(flags as ClinicalSafetyFlag[]).map((flag) => {
+                                   const isChecked = infoForm.clinicalFlags?.includes(flag.id) || false;
+                                   return (
+                                     <label
+                                       key={flag.id}
+                                       className={`flex items-start gap-3 cursor-pointer group p-3 rounded-lg border-2 transition-all ${isChecked ? 'bg-[#38BDF8]/10 border-[#38BDF8]/30' : 'bg-slate-950/50 border-transparent hover:border-slate-700'}`}
+                                     >
+                                       <div className="relative flex items-center justify-center shrink-0 mt-0.5">
+                                         <input
+                                           type="checkbox"
+                                           className="peer appearance-none w-4 h-4 border-2 border-slate-600 rounded bg-slate-900 checked:bg-[#38BDF8] checked:border-[#38BDF8] transition-all cursor-pointer"
+                                           checked={isChecked}
+                                           onChange={(e) => {
+                                             const current = infoForm.clinicalFlags || [];
+                                             if (e.target.checked)
+                                               setInfoForm((f) => ({
+                                                 ...f,
+                                                 clinicalFlags: [...current, flag.id],
+                                               }));
+                                             else
+                                               setInfoForm((f) => ({
+                                                 ...f,
+                                                 clinicalFlags: current.filter((a) => a !== flag.id),
+                                               }));
+                                           }}
+                                         />
+                                       </div>
+                                       <div className="flex flex-col">
+                                          <span className={`text-[11px] font-bold leading-tight ${isChecked ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>
+                                            {flag.conditionName}
+                                          </span>
+                                       </div>
+                                     </label>
+                                   );
+                                 })}
+                               </AccordionContent>
+                            </AccordionItem>
+                          ))}
+                        </Accordion>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                            Ailments, Injuries & Limitations
+                          </Label>
+                          <Textarea
+                            value={infoForm.clinicalNotes || ""}
+                            onChange={(e) =>
+                              setInfoForm((f) => ({
+                                ...f,
+                                clinicalNotes: e.target.value,
+                              }))
+                            }
+                            className="min-h-[200px] rounded-2xl font-bold p-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8] transition-all"
+                            placeholder="Detail any orthopedic history or clinical considerations..."
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+
+            {/* 4. Biometrics & Contact (The Formalities) */}
+            <Card className="rounded-[40px] shadow-xl bg-slate-800 border-slate-700 text-white">
+              <CardHeader className="p-8 border-b border-slate-700">
+                <CardTitle className="text-xl font-black uppercase italic tracking-tighter">
+                  Biometrics & Formalities
+                </CardTitle>
+                <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-[#38BDF8]">
+                  Identity, Vital Statistics & Contact
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-8 space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                      First Name
+                    </Label>
+                    <Input
+                      value={infoForm.firstName || ""}
+                      onChange={(e) =>
+                        setInfoForm((f) => ({ ...f, firstName: e.target.value }))
+                      }
+                      className="h-12 rounded-2xl font-black px-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8]"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                      Last Name
+                    </Label>
+                    <Input
+                      value={infoForm.lastName || ""}
+                      onChange={(e) =>
+                        setInfoForm((f) => ({ ...f, lastName: e.target.value }))
+                      }
+                      className="h-12 rounded-2xl font-black px-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8]"
+                    />
+                  </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
                       Email
@@ -2221,14 +2237,15 @@ export function ClientProfileView({
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                      Emergency Contact Name
+                      Age
                     </Label>
                     <Input
-                      value={infoForm.emergencyContactName || ""}
+                      type="number"
+                      value={infoForm.age ?? ""}
                       onChange={(e) =>
                         setInfoForm((f) => ({
                           ...f,
-                          emergencyContactName: e.target.value,
+                          age: e.target.value ? parseInt(e.target.value) : null,
                         }))
                       }
                       className="h-12 rounded-2xl font-black px-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8]"
@@ -2236,81 +2253,97 @@ export function ClientProfileView({
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                      Emergency Contact Phone
-                    </Label>
-                    <Input
-                      value={infoForm.emergencyContactPhone || ""}
-                      onChange={(e) =>
-                        setInfoForm((f) => ({
-                          ...f,
-                          emergencyContactPhone: e.target.value,
-                        }))
-                      }
-                      className="h-12 rounded-2xl font-black px-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8]"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                      Package Tier
+                      Gender
                     </Label>
                     <Select
-                      value={infoForm.packageTier || "None"}
-                      onValueChange={(
-                        v: "6-Month" | "12-Month" | "18-Month" | "None",
-                      ) => {
-                        let sessionBalance = infoForm.remainingSessions || 0;
-                        if (v === "6-Month") sessionBalance = 48;
-                        else if (v === "12-Month") sessionBalance = 96;
-                        else if (v === "18-Month") sessionBalance = 144;
-                        else if (v === "None") sessionBalance = 2;
-                        setInfoForm((f) => ({
-                          ...f,
-                          packageTier: v,
-                          remainingSessions: sessionBalance,
-                        }));
-                      }}
+                      value={infoForm.gender || "Male"}
+                      onValueChange={(v) =>
+                        setInfoForm((f) => ({ ...f, gender: v as any }))
+                      }
                     >
-                      <SelectTrigger className="w-full h-12 bg-slate-900 border-slate-700 text-white font-bold rounded-2xl focus-visible:ring-[#38BDF8]">
-                        <SelectValue placeholder="Select Tier" />
+                      <SelectTrigger className="h-12 rounded-2xl font-black px-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8]">
+                        <SelectValue placeholder="Select Gender" />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-800 border-slate-700 text-white rounded-xl">
-                        <SelectItem value="None">None / Trial</SelectItem>
-                        <SelectItem value="6-Month">
-                          6-Month (48 Sessions)
-                        </SelectItem>
-                        <SelectItem value="12-Month">
-                          12-Month (96 Sessions)
-                        </SelectItem>
-                        <SelectItem value="18-Month">
-                          18-Month VIP (144 Sessions)
-                        </SelectItem>
+                        <SelectItem value="Male">Male</SelectItem>
+                        <SelectItem value="Female">Female</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                      Session Balance
+                      Height
                     </Label>
                     <Input
-                      type="number"
-                      value={infoForm.remainingSessions ?? ""}
+                      value={infoForm.height || ""}
                       onChange={(e) =>
-                        setInfoForm((f) => ({
-                          ...f,
-                          remainingSessions: parseInt(e.target.value) || 0,
-                        }))
+                        setInfoForm((f) => ({ ...f, height: e.target.value }))
                       }
                       className="h-12 rounded-2xl font-black px-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8]"
                     />
                   </div>
-                </CardContent>
-              </Card>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                      Weight (lbs)
+                    </Label>
+                    <Input
+                      value={infoForm.weight || ""}
+                      onChange={(e) =>
+                        setInfoForm((f) => ({ ...f, weight: e.target.value }))
+                      }
+                      className="h-12 rounded-2xl font-black px-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8]"
+                    />
+                  </div>
+                </div>
 
-              <Card className="rounded-[40px] shadow-xl bg-slate-800 border-slate-700 text-white">
+                <div className="pt-4 border-t border-slate-700/50">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Package Tier</Label>
+                      <Select
+                        value={infoForm.packageTier || "None"}
+                        onValueChange={(v: any) => setInfoForm(f => ({ ...f, packageTier: v }))}
+                      >
+                        <SelectTrigger className="h-12 bg-slate-900 border-slate-700 rounded-2xl font-bold text-white focus-visible:ring-[#38BDF8]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-800 border-slate-700 text-white">
+                          <SelectItem value="None">None / Trial</SelectItem>
+                          <SelectItem value="6-Month">6-Month</SelectItem>
+                          <SelectItem value="12-Month">12-Month</SelectItem>
+                          <SelectItem value="18-Month">18-Month VIP</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Sessions Remaining</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={infoForm.remainingSessions ?? ""}
+                        onChange={(e) =>
+                          setInfoForm((f) => ({ ...f, remainingSessions: parseInt(e.target.value) || 0 }))
+                        }
+                        className="h-12 rounded-2xl font-black px-4 bg-slate-900 border-slate-700 text-white focus-visible:ring-[#38BDF8]"
+                        placeholder="e.g. 12"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-1 space-y-6">
+               <Card className="rounded-[40px] shadow-xl bg-slate-800 border-slate-700 text-white overflow-hidden">
                 <CardHeader className="p-8 border-b border-slate-700 flex flex-row items-center justify-between">
                   <div>
                     <CardTitle className="text-xl font-black uppercase italic tracking-tighter">
-                      Events & Reminders
+                      Reminders
                     </CardTitle>
                     <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-[#38BDF8]">
                       Alerts & Follow-ups
@@ -2319,7 +2352,7 @@ export function ClientProfileView({
                 </CardHeader>
                 <CardContent className="p-8 space-y-6">
                   <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6">
-                    <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="grid grid-cols-1 gap-4 mb-4">
                       <div className="space-y-2">
                         <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
                           Event Type
@@ -2334,19 +2367,11 @@ export function ClientProfileView({
                             <SelectValue placeholder="Select Type..." />
                           </SelectTrigger>
                           <SelectContent className="bg-slate-800 border-slate-700 text-white rounded-xl">
-                            <SelectItem value="Progress Report">
-                              Progress Report
-                            </SelectItem>
-                            <SelectItem value="InBody Scan">
-                              InBody Scan
-                            </SelectItem>
-                            <SelectItem value="Routine Change">
-                              Routine Change
-                            </SelectItem>
+                            <SelectItem value="Progress Report">Progress Report</SelectItem>
+                            <SelectItem value="InBody Scan">InBody Scan</SelectItem>
+                            <SelectItem value="Routine Change">Routine Change</SelectItem>
                             <SelectItem value="Vacation">Vacation</SelectItem>
-                            <SelectItem value="Birthday/Anniversary">
-                              Birthday/Anniversary
-                            </SelectItem>
+                            <SelectItem value="Birthday/Anniversary">Birthday/Anniversary</SelectItem>
                             <SelectItem value="Other">Other</SelectItem>
                           </SelectContent>
                         </Select>
@@ -2477,50 +2502,25 @@ export function ClientProfileView({
             </div>
 
             <div className="space-y-6">
-              <Card className="rounded-[40px] shadow-xl bg-[#0A2E46] border-[#115E8D]/30 text-white overflow-hidden">
-                <CardHeader className="p-8 border-b border-white/5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center">
-                      <Scan className="w-5 h-5 text-[#38BDF8]" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-xl font-black uppercase italic tracking-tighter">
-                        Data & Migration
-                      </CardTitle>
-                      <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-                        Legacy Chart Operations
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-8 space-y-4">
-                  <p className="text-[10px] text-white/60 font-medium leading-relaxed">
-                    Migrate historical data from messy FileMaker charts or handwritten logs using our high-precision OCR pipeline.
-                  </p>
-                  <Button
-                    onClick={() => setView("chart-importer" as any)}
-                    className="w-full h-14 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/10 text-[#38BDF8] font-black uppercase italic tracking-widest text-[11px] transition-all"
-                  >
-                    <Scan className="w-4 h-4 mr-2" />
-                    Open Bulk Import Hub
-                  </Button>
-                  <p className="text-[8px] font-bold text-white/30 uppercase text-center mt-2">
-                    Supports Batch Multi-Process OCR
-                  </p>
-                </CardContent>
-              </Card>
-
               <Card className="rounded-[40px] shadow-sm bg-slate-900 border-slate-800 text-white">
-                <CardHeader className="p-8">
-                  <h3 className="text-xs font-black uppercase tracking-[0.3em] opacity-40">
-                    System State
-                  </h3>
+                <CardHeader className="p-8 border-b border-slate-800">
+                  <CardTitle className="text-xl font-black uppercase italic tracking-tighter">
+                    Account Actions
+                  </CardTitle>
+                  <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-[#38BDF8]">
+                    Protocol & Membership Management
+                  </CardDescription>
                 </CardHeader>
-                <CardContent className="px-8 pb-8 space-y-6">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-300">
-                      Active Client
-                    </Label>
+                <CardContent className="p-8 space-y-6">
+                  <div className="flex items-center justify-between bg-slate-800/50 p-4 rounded-2xl border border-slate-800">
+                    <div>
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Active Account
+                      </Label>
+                      <p className="text-[8px] font-bold opacity-40 uppercase tracking-tighter mt-0.5 text-slate-300">
+                        Toggle client visibility in lists
+                      </p>
+                    </div>
                     <Switch
                       checked={infoForm.isActive}
                       onCheckedChange={(v) =>
@@ -2529,53 +2529,33 @@ export function ClientProfileView({
                       className="data-[state=checked]:bg-emerald-500"
                     />
                   </div>
-                  <div className="flex items-center justify-between">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-300">
-                      Enable Routine B
-                    </Label>
-                    <Switch
-                      checked={infoForm.isRoutineBActive}
-                      onCheckedChange={(v) =>
-                        setInfoForm((f) => ({ ...f, isRoutineBActive: v }))
-                      }
-                      className="data-[state=checked]:bg-amber-500"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-300">
-                        Initial Consult
-                      </Label>
-                      <p className="text-[8px] font-bold opacity-40 uppercase tracking-tighter mt-0.5">
-                        Bypass Demo Screen
-                      </p>
-                    </div>
-                    <Switch
-                      checked={infoForm.consultationCompleted}
-                      onCheckedChange={(v) =>
-                        setInfoForm((f) => ({ ...f, consultationCompleted: v }))
-                      }
-                      className="data-[state=checked]:bg-[#F06C22]"
-                    />
-                  </div>
-                  <div className="pt-6 border-t border-slate-800 mt-6 pb-2">
+
+                  <div className="grid grid-cols-1 gap-4">
                     <Button
-                      variant="outline"
-                      className="w-full h-12 rounded-2xl border-red-500/20 text-red-500 hover:bg-red-500/10 hover:text-red-400 font-black uppercase tracking-widest text-[10px] transition-all bg-transparent"
-                      onClick={() => setIsDeleting(true)}
+                      onClick={() => setView("workouts", { isIntroSession: true })}
+                      className="w-full bg-[#115E8D] hover:bg-[#115E8D]/90 text-white rounded-2xl font-black uppercase italic tracking-widest h-12 shadow-md shadow-[#115E8D]/20"
                     >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Delete Client Account
+                      Start Introductory Session
                     </Button>
-                  </div>
-                  <div className="pt-2">
+                    
                     <Button
                       disabled={isSavingInfo}
                       onClick={handleSaveInfo}
-                      className="w-full h-16 rounded-3xl bg-[#F06C22] hover:bg-[#ea580c] text-white font-black uppercase italic text-xs tracking-widest shadow-[0_0_20px_rgba(240,108,34,0.3)] transition-all"
+                      className="w-full h-12 rounded-2xl bg-[#F06C22] hover:bg-[#ea580c] text-white font-black uppercase italic text-xs tracking-widest shadow-[0_0_20px_rgba(240,108,34,0.3)] transition-all"
                     >
                       {isSavingInfo ? "Processing..." : "Save All Changes"}
                     </Button>
+
+                    <div className="pt-4 mt-2 border-t border-slate-800">
+                      <Button
+                        variant="outline"
+                        className="w-full h-10 rounded-xl border-red-500/20 text-red-500 hover:bg-red-500/10 hover:text-red-400 font-black uppercase tracking-widest text-[9px] transition-all bg-transparent shadow-none"
+                        onClick={() => setIsDeleting(true)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-2" />
+                        Delete Member Profile
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

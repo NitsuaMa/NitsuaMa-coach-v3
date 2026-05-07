@@ -459,6 +459,7 @@ export function ClientProgressReportView({
         ...report,
         sessionNumber: report.sessionNumber || client.sessionCount || 0,
         trainerInitials: trainer.initials,
+        trainerName: trainer.fullName,
         status,
         updatedAt: serverTimestamp(),
       });

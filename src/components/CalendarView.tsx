@@ -8,9 +8,7 @@ import {
   Clock, 
   CheckCircle2,
   CalendarDays,
-  Users,
-  RefreshCw,
-  Loader2
+  Users
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,7 +50,6 @@ export function CalendarView({
   const [selectedTrainerId, setSelectedTrainerId] = useState<string>(
     isAdmin ? 'all' : (authTrainer?.id || 'all')
   );
-  const [isSyncing, setIsSyncing] = useState(false);
 
   const visibleCalendarTrainers = trainers.filter(t => t.isVisibleOnCalendar !== false);
 
@@ -103,17 +100,6 @@ export function CalendarView({
     }
     return items;
   }, [filterMode, filteredSchedules, allClientEvents]);
-
-  const handleSync = async () => {
-    setIsSyncing(true);
-    try {
-      await axios.post('/api/trigger-master-sync', { hardReset: false });
-      setTimeout(() => setIsSyncing(false), 2000);
-    } catch (err) {
-      console.error('Sync failed:', err);
-      setIsSyncing(false);
-    }
-  };
 
   const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
@@ -485,96 +471,125 @@ export function CalendarView({
                 })}
               </tr>
 
-              {allSlots.map((slot, sIdx) => {
-                const isGap = slot === '15:00' && sIdx > 0;
-                return (
-                  <React.Fragment key={`week-slot-${slot}-${sIdx}`}>
-                    {isGap && (
-                      <tr className="bg-slate-900/50 h-8 border-y border-slate-700">
-                        <td colSpan={8} className="text-center border-slate-700">
-                            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600">Midday Gap</span>
-                        </td>
-                      </tr>
-                    )}
-                    <tr className="border-b border-slate-700 last:border-0 hover:bg-white/[0.02] transition-colors group">
-                      <td className="p-3 text-center border-r border-slate-700 bg-slate-900/20 group-hover:bg-slate-900/40">
-                        <span className="text-[11px] font-black tracking-tight text-slate-400">{slot}</span>
-                      </td>
-                      {weekDays.map((date, dIdx) => {
-                        const daySessions = activeSessions.filter(s => {
-                          const d = safeToDate(s.startTime);
-                          const tStr = getSlotHeader(d);
-                          return isSameDay(d, date) && tStr === slot;
-                        });
-
-                        const active = isToday(date);
-
-                        return (
-                          <td 
-                            key={`week-cell-${dIdx}-${slot}`} 
-                            className={cn(
-                              "p-1.5 border-r border-slate-700 last:border-r-0 min-h-[60px] align-top relative",
-                              active ? "bg-white/[0.02]" : "",
-                              daySessions.length === 0 ? "hover:bg-slate-800/30" : ""
-                            )}
-                            onClick={() => {
-                                setSelectedDate(date);
-                                setViewMode('day');
-                            }}
-                          >
-                            <div className="flex flex-col gap-1.5 h-full">
-                              {daySessions.length === 0 && (
-                                <div className="absolute inset-2 border-2 border-dashed border-slate-700/30 rounded-xl pointer-events-none" />
-                              )}
-                              {daySessions.map((session, sessIdx) => {
-                                const trainer = visibleCalendarTrainers.find(t => t.id === trainerMap[session.trainerName]);
-                                const color = trainer && visibleCalendarTrainers.length > 0 ? TRAINER_COLORS[visibleCalendarTrainers.indexOf(trainer) % TRAINER_COLORS.length] : TRAINER_COLORS[0];
-                                
-                                const tId = trainerMap[session.trainerName];
-                                const isTrainerSelected = selectedTrainerId === 'all' || tId === selectedTrainerId;
-                                
-                                const formatClientName = (fullName: string) => {
-                                  if (!fullName) return 'Unknown';
-                                  const parts = fullName.trim().split(' ');
-                                  if (parts.length > 1) {
-                                    return `${parts[0]} ${parts[parts.length - 1][0]}.`;
-                                  }
-                                  return parts[0];
-                                };
-                                const formattedName = formatClientName(session.clientName || '');
-
-                                return (
-                                  <div
-                                    key={session.id || `sess-${sessIdx}`}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleClientClick(session);
-                                    }}
-                                    className={cn(
-                                      "flex flex-col overflow-hidden p-1.5 rounded-xl border-l-4 shadow-sm transition-all cursor-pointer relative",
-                                      isTrainerSelected 
-                                        ? `${color.border} opacity-100 hover:brightness-125` 
-                                        : "border-slate-700 opacity-20 grayscale",
-                                      color.bg
-                                    )}
-                                  >
-                                    <span className="text-[10px] text-white/90 font-medium leading-none mb-1 whitespace-nowrap text-ellipsis overflow-hidden">
-                                      {slot}
-                                    </span>
-                                    <span className="text-xs font-bold text-white truncate whitespace-nowrap text-ellipsis leading-none" title={session.clientName}>
-                                      {formattedName}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
+              {(() => {
+                const skippedWeekCells = new Set<string>();
+                return allSlots.map((slot, sIdx) => {
+                  const isGap = slot === '15:00' && sIdx > 0;
+                  return (
+                    <React.Fragment key={`week-slot-${slot}-${sIdx}`}>
+                      {isGap && (
+                        <tr className="bg-slate-900/50 h-8 border-y border-slate-700">
+                          <td colSpan={8} className="text-center border-slate-700">
+                              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600">Midday Gap</span>
                           </td>
-                        );
-                      })}
-                    </tr>
-                  </React.Fragment>
-                );
-              })}
+                        </tr>
+                      )}
+                      <tr className="border-b border-slate-700 last:border-0 hover:bg-white/[0.02] transition-colors group">
+                        <td className="p-3 text-center border-r border-slate-700 bg-slate-900/20 group-hover:bg-slate-900/40">
+                          <span className="text-[11px] font-black tracking-tight text-slate-400">{slot}</span>
+                        </td>
+                        {weekDays.map((date, dIdx) => {
+                          const cellId = `${dIdx}-${slot}`;
+                          if (skippedWeekCells.has(cellId)) return null;
+
+                          const daySessions = activeSessions.filter(s => {
+                            const d = safeToDate(s.startTime);
+                            const tStr = getSlotHeader(d);
+                            return isSameDay(d, date) && tStr === slot;
+                          });
+
+                          const active = isToday(date);
+                          
+                          let maxRowSpan = 1;
+                          if (daySessions.length > 0) {
+                            daySessions.forEach(s => {
+                              const start = safeToDate(s.startTime);
+                              const end = safeToDate(s.endTime);
+                              const duration = (end.getTime() - start.getTime()) / (1000 * 60);
+                              const rs = Math.max(1, Math.round(duration / 30));
+                              if (rs > maxRowSpan) maxRowSpan = rs;
+                            });
+
+                            if (maxRowSpan > 1) {
+                              for(let i = 1; i < maxRowSpan; i++) {
+                                if (allSlots[sIdx + i]) {
+                                  skippedWeekCells.add(`${dIdx}-${allSlots[sIdx + i]}`);
+                                }
+                              }
+                            }
+                          }
+
+                          return (
+                            <td 
+                              key={`week-cell-${dIdx}-${slot}`} 
+                              rowSpan={maxRowSpan}
+                              className={cn(
+                                "p-1.5 border-r border-slate-700 last:border-r-0 align-top relative",
+                                active ? "bg-white/[0.02]" : "",
+                                daySessions.length === 0 ? "hover:bg-slate-800/30" : "",
+                                maxRowSpan > 1 ? "" : "min-h-[60px]"
+                              )}
+                              onClick={() => {
+                                  setSelectedDate(date);
+                                  setViewMode('day');
+                              }}
+                            >
+                              <div className="flex flex-col gap-1.5 h-full">
+                                {daySessions.length === 0 && (
+                                  <div className="absolute inset-2 border-2 border-dashed border-slate-700/30 rounded-xl pointer-events-none" />
+                                )}
+                                {daySessions.map((session, sessIdx) => {
+                                  const trainerIdx = visibleCalendarTrainers.findIndex(t => t.fullName === session.trainerName);
+                                  const trainer = trainerIdx !== -1 ? visibleCalendarTrainers[trainerIdx] : null;
+                                  const color = trainer ? TRAINER_COLORS[trainerIdx % TRAINER_COLORS.length] : TRAINER_COLORS[0];
+                                  
+                                  const tId = trainerMap[session.trainerName];
+                                  const isTrainerSelected = selectedTrainerId === 'all' || tId === selectedTrainerId;
+                                  
+                                  const formatClientName = (fullName: string) => {
+                                    if (!fullName) return 'Unknown';
+                                    const parts = fullName.trim().split(' ');
+                                    if (parts.length > 1) {
+                                      return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+                                    }
+                                    return parts[0];
+                                  };
+                                  const formattedName = formatClientName(session.clientName || '');
+
+                                  return (
+                                    <div
+                                      key={session.id || `sess-${sessIdx}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleClientClick(session);
+                                      }}
+                                      className={cn(
+                                        "flex flex-col overflow-hidden p-1.5 rounded-xl border-l-4 shadow-sm transition-all cursor-pointer relative",
+                                        isTrainerSelected 
+                                          ? `${color.border} opacity-100 hover:brightness-125` 
+                                          : "border-slate-700 opacity-20 grayscale",
+                                        color.bg,
+                                        maxRowSpan > 1 ? "flex-grow" : ""
+                                      )}
+                                    >
+                                      <span className="text-[10px] text-white/90 font-medium leading-none mb-1 whitespace-nowrap text-ellipsis overflow-hidden">
+                                        {slot}
+                                      </span>
+                                      <span className="text-xs font-bold text-white truncate whitespace-nowrap text-ellipsis leading-none" title={session.clientName}>
+                                        {formattedName}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    </React.Fragment>
+                  );
+                });
+              })()}
             </tbody>
           </table>
         </div>
@@ -736,13 +751,18 @@ export function CalendarView({
                   </td>
                 </tr>
 
-                {slots.map((slot, sIdx) => {
+                {(() => {
+                  const skippedCells = new Set<string>();
+                  return slots.map((slot, sIdx) => {
                     return (
-                    <tr key={slot} className="border-b border-slate-700 last:border-0 hover:bg-white/[0.02] transition-colors group relative">
+                      <tr key={slot} className="border-b border-slate-700 last:border-0 hover:bg-white/[0.02] transition-colors group relative">
                         <td className="p-3 text-center border-r border-slate-700 sticky left-0 bg-[#0A2E46] z-10 text-slate-400">
                             <span className="text-[11px] font-black tracking-tighter group-hover:text-white transition-colors">{slot}</span>
                         </td>
                         {filteredTrainers.map((trainer) => {
+                            const cellId = `${trainer.id}-${slot}`;
+                            if (skippedCells.has(cellId)) return null;
+
                             const session = filteredItems.find(s => {
                             if (s.isClientEvent) return false;
                             const d = safeToDate(s.startTime);
@@ -750,12 +770,32 @@ export function CalendarView({
                             return isSameDay(d, selectedDate) && tStr === slot && s.trainerName === trainer.fullName;
                             });
 
-                            const color = TRAINER_COLORS[visibleCalendarTrainers.indexOf(trainer) % TRAINER_COLORS.length];
+                            const trainerIdx = visibleCalendarTrainers.indexOf(trainer);
+                            const color = TRAINER_COLORS[trainerIdx % TRAINER_COLORS.length];
+
+                            let rowSpan = 1;
+                            if (session) {
+                              const start = safeToDate(session.startTime);
+                              const end = safeToDate(session.endTime);
+                              const duration = (end.getTime() - start.getTime()) / (1000 * 60);
+                              rowSpan = Math.max(1, Math.round(duration / 30));
+                              if (rowSpan > 1) {
+                                for(let i = 1; i < rowSpan; i++) {
+                                  if (slots[sIdx + i]) {
+                                    skippedCells.add(`${trainer.id}-${slots[sIdx + i]}`);
+                                  }
+                                }
+                              }
+                            }
 
                             return (
                             <td 
                                 key={`${trainer.id}-${slot}`} 
-                                className="p-1 border-r border-slate-700 last:border-r-0 h-[60px]"
+                                rowSpan={rowSpan}
+                                className={cn(
+                                  "p-1 border-r border-slate-700 last:border-r-0",
+                                  rowSpan > 1 ? "" : "h-[60px]"
+                                )}
                             >
                                 {session ? (
                                 <div
@@ -765,12 +805,24 @@ export function CalendarView({
                                     color.border
                                     )}
                                 >
-                                    <span className="text-[10px] font-bold text-slate-400 tabular-nums leading-none tracking-tight">
-                                    {slot} - {session.endTime ? getSlotHeader(safeToDate(session.endTime)) : '30m'}
-                                    </span>
+                                    <div className="flex justify-between items-start mb-1">
+                                      <span className="text-[10px] font-bold text-slate-400 tabular-nums leading-none tracking-tight">
+                                      {slot} - {session.endTime ? getSlotHeader(safeToDate(session.endTime)) : '30m'}
+                                      </span>
+                                      {rowSpan > 1 && (
+                                        <Badge variant="outline" className="text-[8px] h-4 bg-slate-900/50 border-slate-700 text-[#38BDF8]">
+                                          {Math.round((safeToDate(session.endTime).getTime() - safeToDate(session.startTime).getTime()) / 60000)}m
+                                        </Badge>
+                                      )}
+                                    </div>
                                     <span className="text-sm font-black truncate text-white leading-tight">
                                     {session.clientName}
                                     </span>
+                                    {rowSpan > 1 && session.serviceName && (
+                                      <span className="text-[10px] text-slate-500 font-medium mt-1 truncate">
+                                        {session.serviceName}
+                                      </span>
+                                    )}
                                 </div>
                                 ) : (
                                     <div className="h-full w-full opacity-0 hover:opacity-10 transition-opacity flex items-center justify-center p-2 bg-slate-600 rounded-lg cursor-pointer">
@@ -780,9 +832,10 @@ export function CalendarView({
                             </td>
                             );
                         })}
-                    </tr>
+                      </tr>
                     );
-                })}
+                  });
+                })()}
                 </tbody>
             </table>
             </div>
@@ -834,17 +887,6 @@ export function CalendarView({
           </div>
 
           <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700 shadow-sm">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={handleSync}
-              disabled={isSyncing}
-              className="rounded-lg font-black uppercase text-[9px] tracking-widest px-4 h-8 gap-2 text-slate-300 hover:text-white hover:bg-slate-700"
-            >
-              {isSyncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3 text-[#38BDF8]" />}
-              {isSyncing ? 'Syncing' : 'Sync'}
-            </Button>
-            <div className="w-px h-4 bg-slate-700 mx-1 my-auto" />
             <Button 
               size="sm" 
               onClick={() => setViewMode('month')}

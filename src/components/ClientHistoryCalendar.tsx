@@ -24,7 +24,8 @@ import {
   Clock,
   AlertCircle,
   PlusCircle,
-  Trash2
+  Trash2,
+  Maximize
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -51,6 +52,7 @@ export function ClientHistoryCalendar({
   allLogs?: ExerciseLog[]
 }) {
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
+  const [localAllLogs, setLocalAllLogs] = useState<ExerciseLog[]>([]);
   const [viewDate, setViewDate] = useState(new Date()); // For month navigation
   const [viewType, setViewType] = useState<'calendar' | 'list'>('calendar');
   const [selectedDaySessions, setSelectedDaySessions] = useState<WorkoutSession[]>([]);
@@ -82,6 +84,21 @@ export function ClientHistoryCalendar({
       setSessions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkoutSession)));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'sessions');
+    });
+    return () => unsubscribe();
+  }, [clientId, user]);
+
+  // Fetch ALL logs for the client to support accurate list view summaries
+  useEffect(() => {
+    if (!clientId || !user) return;
+    const q = query(
+      collection(db, 'exerciseLogs'),
+      where('clientId', '==', clientId)
+    );
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setLocalAllLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExerciseLog)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'exerciseLogs');
     });
     return () => unsubscribe();
   }, [clientId, user]);
@@ -320,6 +337,15 @@ export function ClientHistoryCalendar({
              >
                <PlusCircle className="w-4 h-4 mr-2" /> Log Past Session
             </Button>
+            <Button 
+               onClick={() => {
+                 window.dispatchEvent(new CustomEvent('open-bulk-import'));
+               }}
+               variant="outline" 
+               className="border-[#F06C22]/30 text-[#F06C22] hover:bg-[#F06C22]/10 font-black tracking-widest uppercase text-[10px] h-12 rounded-2xl px-6 shadow-sm"
+             >
+               <Maximize className="w-4 h-4 mr-2" /> Migration
+            </Button>
             {viewType === 'calendar' && (
               <div className="flex gap-2">
                 <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="text-[#68717A] hover:text-white hover:bg-white/10 rounded-2xl h-12 w-12 transition-all">
@@ -393,11 +419,19 @@ export function ClientHistoryCalendar({
                             "h-6 rounded-xl px-2 flex items-center justify-between border shadow-sm",
                             s.routineName?.toUpperCase().includes('B') 
                               ? "bg-[#F06C22]/20 border-[#F06C22]/30 text-[#F06C22]" 
-                              : "bg-[#115E8D]/20 border-[#115E8D]/30 text-[#38BDF8]"
+                              : (s.routineName?.toUpperCase().includes('A') 
+                                ? "bg-[#115E8D]/20 border-[#115E8D]/30 text-[#38BDF8]"
+                                : (s.trainerId === 'legacy-trainer' || s.trainerInitials === 'Legacy' || s.trainerInitials === 'Chart'
+                                  ? "bg-slate-700/50 border-[#F06C22]/30 text-[#F06C22]/70"
+                                  : "bg-slate-700/30 border-slate-700 text-slate-500"))
                           )}
                         >
                           <span className="text-[10px] font-black italic">
-                            {s.routineName?.toUpperCase().includes('B') ? 'B' : s.routineName?.toUpperCase().includes('A') ? 'A' : 'S'}
+                            {s.routineName?.toUpperCase().includes('B') 
+                              ? 'B' 
+                              : (s.routineName?.toUpperCase().includes('A') 
+                                ? 'A' 
+                                : (s.trainerId === 'legacy-trainer' || s.trainerInitials === 'Legacy' || s.trainerInitials === 'Chart' ? 'I' : '•'))}
                           </span>
                           <span className="text-[9px] font-bold opacity-80">{s.trainerInitials || '--'}</span>
                         </div>
@@ -424,15 +458,15 @@ export function ClientHistoryCalendar({
                  }
                }
                
-               const isLegacy = session.trainerId === 'legacy-trainer' || session.trainerInitials === 'Legacy';
+               const isLegacy = session.trainerId === 'legacy-trainer' || session.trainerInitials === 'Legacy' || session.trainerInitials === 'Chart';
 
-               const sessionLogs = allLogs.filter(l => l.sessionId === session.id);
+               const sessionLogs = localAllLogs.filter(l => l.sessionId === session.id);
                const totalVolume = Math.round(sessionLogs.reduce((acc, log) => acc + calculateExerciseVolume(log), 0));
                const machineNames = sessionLogs.map(l => {
                  const m = machines.find(mac => mac.id === l.machineId);
                  return m?.name || 'Unknown';
                }).filter(Boolean);
-               const shorthandMachines = machineNames.length > 0 ? machineNames.join(', ') : 'No Machines Logged';
+               const shorthandMachines = machineNames.length > 0 ? machineNames.filter(n => n !== 'Unknown').join(', ') : '';
 
                return (
                  <div
@@ -445,7 +479,7 @@ export function ClientHistoryCalendar({
                  >
                    {isLegacy && (
                      <div className="absolute top-0 right-0 bg-[#F06C22] text-white text-[8px] sm:text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl shadow-sm z-10">
-                       Legacy Import
+                       Imported
                      </div>
                    )}
                    <div className="flex flex-col items-center justify-center min-w-[80px]">
@@ -470,7 +504,9 @@ export function ClientHistoryCalendar({
                       </div>
                       
                       <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1 truncate">
-                        Routine {session.routineName || 'Special'} &middot; {shorthandMachines}
+                        {session.routineName ? `Routine ${session.routineName}` : (isLegacy ? 'Imported Session' : '')}
+                        {(session.routineName || isLegacy) && shorthandMachines ? ' • ' : ''}
+                        {shorthandMachines || (!session.routineName && !isLegacy ? 'No Machines Logged' : '')}
                       </p>
                    </div>
                    

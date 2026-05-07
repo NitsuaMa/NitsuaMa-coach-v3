@@ -18,6 +18,7 @@ export interface MachineKnowledge {
   executionCues?: string[];
   clinicalWarnings?: string[];
   contraindicatedFor?: string[];
+  biomechanicalNotes?: string;
 }
 
 export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {

@@ -93,6 +93,7 @@ import { ClientProfileView } from './components/ClientProfileView';
 import { CalendarView } from './components/CalendarView';
 import { PinLoginView } from './components/PinLoginView';
 import { LegacyChartImporter } from './components/LegacyChartImporter';
+import { MachineLeaderboardDashboard } from './components/MachineLeaderboardDashboard';
 import { ProfilesView } from './components/ProfilesView';
 import { ClientDirectoryView } from './components/ClientDirectoryView';
 import { TrainerProfileView } from './components/TrainerProfileView';
@@ -198,6 +199,7 @@ export default function App() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [selectedProfileTrainerId, setSelectedProfileTrainerId] = useState<string | null>(null);
+  const [leaderboardReturnView, setLeaderboardReturnView] = useState<View>('trainer-hub');
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [machines, setMachines] = useState<Machine[]>(DEFAULT_MACHINES);
@@ -209,6 +211,16 @@ export default function App() {
   const [showNewClientsDialog, setShowNewClientsDialog] = useState(false);
   const [isReorderingTrainers, setIsReorderingTrainers] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [isIntroSession, setIsIntroSession] = useState(false);
+
+  const setView = (view: View, data?: { isIntroSession?: boolean }) => {
+    if (data?.isIntroSession) {
+      setIsIntroSession(true);
+    } else {
+      setIsIntroSession(false);
+    }
+    setCurrentView(view);
+  };
 
   const startUnassignedSession = async () => {
     if (!authTrainer) return;
@@ -839,7 +851,16 @@ export default function App() {
       });
 
       const customMachines = machinesData.filter(r => !DEFAULT_MACHINES.find(dm => dm.id === r.id));
-      const finalMachines = [...mergedMachines, ...customMachines].sort((a, b) => a.order - b.order);
+      
+      const uniqueNames = new Set<string>();
+      const finalMachines = [...mergedMachines, ...customMachines]
+        .filter(m => {
+          const lowerName = m.name?.toLowerCase() || '';
+          if (uniqueNames.has(lowerName)) return false;
+          uniqueNames.add(lowerName);
+          return true;
+        })
+        .sort((a, b) => a.order - b.order);
       
       setMachines(finalMachines);
       sessionStorage.setItem('msf_machines_cache', JSON.stringify(finalMachines));
@@ -1228,10 +1249,10 @@ export default function App() {
                 isAdmin={user?.email === "jurgensaj@gmail.com"}
                 onSelectClient={(id) => {
                   setSelectedClientId(id);
-                  setCurrentView('profile');
+                  setView('profile');
                 }}
                 onStartNewClientOnboarding={setNewClientOnboardingName}
-                setView={setCurrentView}
+                setView={setView}
                 schedules={schedules}
                 sessions={sessions}
                 editingClient={editingClient}
@@ -1244,12 +1265,18 @@ export default function App() {
                 setSelectedSessionId={setSelectedSessionId}
                 onSelectTrainer={(id) => {
                   setSelectedProfileTrainerId(id);
-                  setCurrentView('trainer-profile');
+                  setView('trainer-profile');
                 }}
               />
             )}
             {currentView === 'machine-knowledge' && (
-              <MachineKnowledgeDashboard />
+              <MachineKnowledgeDashboard setView={(view) => {
+                if (view === 'leaderboard') setLeaderboardReturnView('machine-knowledge');
+                setView(view);
+              }} />
+            )}
+            {currentView === 'leaderboard' && (
+              <MachineLeaderboardDashboard onBack={() => setCurrentView(leaderboardReturnView)} />
             )}
             {currentView === 'machines' && (
               <MachinesView 
@@ -1269,7 +1296,7 @@ export default function App() {
                 schedules={schedules}
                 trainers={trainers}
                 user={user}
-                setView={setCurrentView}
+                setView={setView}
                 setSelectedClientId={setSelectedClientId}
                 showClientPicker={showClientPicker}
                 setShowClientPicker={setShowClientPicker}
@@ -1284,6 +1311,7 @@ export default function App() {
                 focusRecords={focusRecords}
                 isSyncing={isSyncing}
                 setIsSyncing={setIsSyncing}
+                isIntroSession={isIntroSession}
               />
             )}
             {currentView === 'history' && (
@@ -1307,9 +1335,9 @@ export default function App() {
                 onDelete={handleDeleteClient}
                 onSelectReport={(reportId) => {
                   setSelectedReportId(reportId);
-                  setCurrentView('progress-report');
+                  setView('progress-report');
                 }}
-                setView={setCurrentView}
+                setView={setView}
                 hasQuotaError={hasQuotaError}
                 user={user}
               />
@@ -1348,7 +1376,10 @@ export default function App() {
                 onRestoreMachines={handleRestoreMachines}
                 onLogout={handleLogout}
                 onReorderTrainers={() => setIsReorderingTrainers(true)}
-                setView={setCurrentView}
+                setView={(view) => {
+                  if (view === 'leaderboard') setLeaderboardReturnView('trainer-hub');
+                  setCurrentView(view as any);
+                }}
               />
             )}
             {currentView === 'dashboard' && (
@@ -1370,7 +1401,7 @@ export default function App() {
                 isAdmin={user.email === "jurgensaj@gmail.com"}
                 onSelectClient={setSelectedClientId}
                 onStartNewClientOnboarding={setNewClientOnboardingName}
-                setView={setCurrentView}
+                setView={setView}
                 clients={clients}
               />
             )}
@@ -4786,7 +4817,8 @@ function WorkoutTrackerView({
   focusRecords,
   isSyncing,
   setIsSyncing,
-  schedules
+  schedules,
+  isIntroSession
 }: { 
   clientId: string | null, 
   clients: Client[], 
@@ -4794,7 +4826,7 @@ function WorkoutTrackerView({
   schedules: any[],
   trainers: Trainer[], 
   user: FirebaseUser, 
-  setView: (v: View) => void, 
+  setView: (v: View, data?: { isIntroSession?: boolean }) => void, 
   setSelectedClientId: (id: string | null) => void, 
   showClientPicker: boolean, 
   setShowClientPicker: (v: boolean) => void,
@@ -4805,7 +4837,8 @@ function WorkoutTrackerView({
   trainerFocuses: TrainerFocus[],
   focusRecords: FocusRecord[],
   isSyncing: boolean,
-  setIsSyncing: (v: boolean) => void
+  setIsSyncing: (v: boolean) => void,
+  isIntroSession?: boolean
 }) {
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [logs, setLogs] = useState<Record<string, ExerciseLog>>({});
@@ -5744,6 +5777,15 @@ function WorkoutTrackerView({
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-[calc(100vh-80px)] flex flex-col gap-1 overflow-hidden">
+      {isIntroSession && (
+          <div className="bg-[#F06C22] p-3 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-[#F06C22]/20 border border-white/20 animate-pulse mt-2 mx-4">
+            <Sparkles className="w-5 h-5 text-white" />
+            <span className="text-white font-black uppercase italic tracking-[0.15em] text-xs">
+              NEW CLIENT INTRODUCTORY SESSION: CONVERSATIONAL BASELINE
+            </span>
+            <Sparkles className="w-5 h-5 text-white" />
+          </div>
+      )}
       {/* Persistent Active Header - Minimalist Refactor */}
       {(selectedClient || currentSession) && (
         <div className="bg-[#0A2E46] border-b border-slate-800 px-4 flex items-center justify-between sticky top-0 z-40 h-16 shadow-lg backdrop-blur-xl shrink-0">
