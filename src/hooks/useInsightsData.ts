@@ -86,6 +86,8 @@ export function useInsightsData(filters: InsightsFilterState) {
       timeToTrend: filteredTimeToTrend,
       retention: filteredRetention,
       machineEfficacy: filteredMachineEfficacy,
+      strengthGainsByDemographic: globalData.strengthGainsByDemographic,
+      strengthGainsByMuscleGroup: globalData.strengthGainsByMuscleGroup,
     });
 
   }, [globalData, filters]);

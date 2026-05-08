@@ -2131,10 +2131,19 @@ export function ClientProfileView({
                                            }}
                                          />
                                        </div>
-                                       <div className="flex flex-col">
-                                          <span className={`text-[11px] font-bold leading-tight ${isChecked ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>
-                                            {flag.conditionName}
-                                          </span>
+                                       <div className="flex flex-col w-full gap-1.5">
+                                          <div className="flex items-center justify-between gap-2">
+                                            <span className={`text-[11px] font-bold leading-tight ${isChecked ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>
+                                              {flag.conditionName}
+                                            </span>
+                                            <span className={`shrink-0 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${
+                                              flag.category === "Absolute Contraindication" ? "bg-rose-950/50 text-rose-400" :
+                                              flag.category === "High Risk" ? "bg-amber-950/50 text-amber-400" :
+                                              "bg-blue-950/50 text-blue-400"
+                                            }`}>
+                                              {flag.category === "Moderate / Needs Modification" ? "Moderate" : flag.category}
+                                            </span>
+                                          </div>
                                        </div>
                                      </label>
                                    );

@@ -77,6 +77,25 @@ export class InsightsService {
             { ageBracketLabel: '36-55', occupationCategory: 'Manual Labor', averageLifespanMonths: 24, averageSessionsCompleted: 96, cohortSize: 90 },
             { ageBracketLabel: '56+', occupationCategory: 'Manual Labor', averageLifespanMonths: 35, averageSessionsCompleted: 140, cohortSize: 60 },
           ],
+          strengthGainsByDemographic: [
+            { segment: 'Occupation', label: 'Corporate & Tech', averagePercentGain: 84 },
+            { segment: 'Occupation', label: 'Manual Labor', averagePercentGain: 42 },
+            { segment: 'Occupation', label: 'Healthcare & Clinical', averagePercentGain: 68 },
+            { segment: 'Occupation', label: 'First Responder', averagePercentGain: 55 },
+            { segment: 'Age Group', label: '18-35', averagePercentGain: 78 },
+            { segment: 'Age Group', label: '36-55', averagePercentGain: 62 },
+            { segment: 'Age Group', label: '56+', averagePercentGain: 59 },
+            { segment: 'Contraindications', label: 'None', averagePercentGain: 75 },
+            { segment: 'Contraindications', label: 'Low Back Pain', averagePercentGain: 52 },
+            { segment: 'Contraindications', label: 'Joint Replacement', averagePercentGain: 48 },
+            { segment: 'Contraindications', label: 'Hypertension', averagePercentGain: 60 }
+          ],
+          strengthGainsByMuscleGroup: [
+            { muscleGroup: 'Chest & Shoulders', averagePercentGain: 55 },
+            { muscleGroup: 'Back & Core', averagePercentGain: 82 },
+            { muscleGroup: 'Legs & Glutes', averagePercentGain: 71 },
+            { muscleGroup: 'Arms & Grip', averagePercentGain: 46 }
+          ],
           summary: {
             totalCohortClients: 1542,
             totalCohortSessions: 42100,

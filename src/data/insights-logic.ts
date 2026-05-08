@@ -54,6 +54,17 @@ export interface DemographicRetentionMetric {
   cohortSize: number;
 }
 
+export interface StrengthGainDemographicMetric {
+  segment: string;
+  label: string;
+  averagePercentGain: number;
+}
+
+export interface StrengthGainMuscleGroupMetric {
+  muscleGroup: string;
+  averagePercentGain: number;
+}
+
 /**
  * The master aggregate data structure consumed by the Insights Dashboard HUD
  * after raw clinical logs have been processed through the aggregation pipeline.
@@ -62,6 +73,8 @@ export interface DashboardAggregatedData {
   timeToTrend: TimeToTrendMetric[];
   machineEfficacy: MachineEfficacyMetric[];
   retention: DemographicRetentionMetric[];
+  strengthGainsByDemographic: StrengthGainDemographicMetric[];
+  strengthGainsByMuscleGroup: StrengthGainMuscleGroupMetric[];
   summary: {
     totalCohortClients: number;
     totalCohortSessions: number;
