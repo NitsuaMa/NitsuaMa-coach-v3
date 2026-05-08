@@ -9,6 +9,7 @@ import {
   getDocs,
   addDoc,
   updateDoc,
+  setDoc,
   doc,
   serverTimestamp,
   Timestamp,
@@ -37,7 +38,7 @@ import {
   Maximize2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { MachineInsightsModal } from "./MachineInsightsModal";
+import { MachineSettingsDashboardModal } from "./MachineSettingsDashboardModal";
 import {
   Card,
   CardContent,
@@ -179,12 +180,32 @@ export function ClientProfileView({
   >({});
   const [routineBuilderTarget, setRoutineBuilderTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [selectedInsightMachine, setSelectedInsightMachine] =
-    useState<Machine | null>(null);
+  const [editingSettings, setEditingSettings] = useState<{machineId: string, settings: Record<string, string>} | null>(null);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [matrixRoutineFilter, setMatrixRoutineFilter] = useState<string>("all");
   const SESSIONS_PER_PAGE = 3;
 
   const client = clients.find((c) => c.id === clientId);
+
+  const handleUpdateMachineSettings = async () => {
+    if (!editingSettings || !clientId) return;
+    setIsSavingSettings(true);
+    try {
+      const settingId = `${clientId}_${editingSettings.machineId}`;
+      await setDoc(doc(db, 'clientMachineSettings', settingId), {
+        clientId,
+        machineId: editingSettings.machineId,
+        settings: editingSettings.settings,
+        updatedBy: auth.currentUser?.email || 'Unknown',
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      setEditingSettings(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `clientMachineSettings/${editingSettings.machineId}`);
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
 
   useEffect(() => {
     if (client) {
@@ -1128,7 +1149,10 @@ export function ClientProfileView({
                     return (
                       <tr
                         key={machine.id}
-                        onClick={() => setSelectedInsightMachine(machine)}
+                        onClick={() => {
+                          const currentSettings = clientSettings[machine.id!]?.settings || {};
+                          setEditingSettings({ machineId: machine.id!, settings: { ...currentSettings } });
+                        }}
                         className="even:bg-[#F9FAFB] odd:bg-white hover:bg-slate-100 hover:brightness-95 cursor-pointer transition-all h-[32px] group border-b border-slate-100 last:border-b-0"
                       >
                         <td className="p-1 pl-4 border-r border-slate-200/60 truncate align-middle relative overflow-hidden">
@@ -2097,61 +2121,48 @@ export function ClientProfileView({
                           <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
                             Select Pertinent Health Flags
                           </Label>
-                        <Accordion type="multiple" className="w-full space-y-4">
+                        <div className="w-full space-y-2">
                           {Object.entries(groupedFlags).map(([category, flags]) => (
-                            <AccordionItem key={category} value={category} className="border-slate-700 bg-slate-900/50 rounded-xl px-4 py-1">
-                               <AccordionTrigger className="hover:no-underline text-slate-200 font-bold uppercase tracking-widest text-[10px] py-3">
-                                 {category}
-                               </AccordionTrigger>
-                               <AccordionContent className="pt-2 pb-4 space-y-2">
-                                 {(flags as ClinicalSafetyFlag[]).map((flag) => {
-                                   const isChecked = infoForm.clinicalFlags?.includes(flag.id) || false;
-                                   return (
-                                     <label
-                                       key={flag.id}
-                                       className={`flex items-start gap-3 cursor-pointer group p-3 rounded-lg border-2 transition-all ${isChecked ? 'bg-[#38BDF8]/10 border-[#38BDF8]/30' : 'bg-slate-950/50 border-transparent hover:border-slate-700'}`}
-                                     >
-                                       <div className="relative flex items-center justify-center shrink-0 mt-0.5">
-                                         <input
-                                           type="checkbox"
-                                           className="peer appearance-none w-4 h-4 border-2 border-slate-600 rounded bg-slate-900 checked:bg-[#38BDF8] checked:border-[#38BDF8] transition-all cursor-pointer"
-                                           checked={isChecked}
-                                           onChange={(e) => {
-                                             const current = infoForm.clinicalFlags || [];
-                                             if (e.target.checked)
-                                               setInfoForm((f) => ({
-                                                 ...f,
-                                                 clinicalFlags: [...current, flag.id],
-                                               }));
-                                             else
-                                               setInfoForm((f) => ({
-                                                 ...f,
-                                                 clinicalFlags: current.filter((a) => a !== flag.id),
-                                               }));
-                                           }}
-                                         />
-                                       </div>
-                                       <div className="flex flex-col w-full gap-1.5">
-                                          <div className="flex items-center justify-between gap-2">
-                                            <span className={`text-[11px] font-bold leading-tight ${isChecked ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>
-                                              {flag.conditionName}
-                                            </span>
-                                            <span className={`shrink-0 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${
-                                              flag.category === "Absolute Contraindication" ? "bg-rose-950/50 text-rose-400" :
-                                              flag.category === "High Risk" ? "bg-amber-950/50 text-amber-400" :
-                                              "bg-blue-950/50 text-blue-400"
-                                            }`}>
-                                              {flag.category === "Moderate / Needs Modification" ? "Moderate" : flag.category}
-                                            </span>
-                                          </div>
-                                       </div>
-                                     </label>
-                                   );
-                                 })}
-                               </AccordionContent>
-                            </AccordionItem>
+                            <div key={category}>
+                              <h4 className="text-sm font-bold text-slate-300 mb-3 mt-6 first:mt-0">
+                                {category}
+                              </h4>
+                              <div className="flex flex-wrap gap-2">
+                                {(flags as ClinicalSafetyFlag[]).map((flag) => {
+                                  const isChecked = infoForm.clinicalFlags?.includes(flag.id) || false;
+                                  
+                                  const unselectedStyles = "bg-slate-900 border border-slate-700 text-slate-400 hover:bg-slate-800 transition-colors px-3 py-1.5 rounded-full text-xs font-medium";
+                                  
+                                  let selectedStyles = "";
+                                  if (flag.severity === "Absolute Contraindication") {
+                                    selectedStyles = "bg-rose-950/50 border border-rose-500 text-rose-400 px-3 py-1.5 rounded-full text-xs font-medium shadow-[0_0_10px_rgba(244,63,94,0.1)]";
+                                  } else if (flag.severity === "High Risk") {
+                                    selectedStyles = "bg-amber-950/50 border border-amber-500 text-amber-400 px-3 py-1.5 rounded-full text-xs font-medium shadow-[0_0_10px_rgba(245,158,11,0.1)]";
+                                  } else {
+                                    selectedStyles = "bg-blue-950/50 border border-blue-500 text-blue-400 px-3 py-1.5 rounded-full text-xs font-medium shadow-[0_0_10px_rgba(59,130,246,0.1)]";
+                                  }
+
+                                  return (
+                                    <button
+                                      key={flag.id}
+                                      onClick={() => {
+                                        const current = infoForm.clinicalFlags || [];
+                                        if (!isChecked) {
+                                          setInfoForm((f) => ({ ...f, clinicalFlags: [...current, flag.id] }));
+                                        } else {
+                                          setInfoForm((f) => ({ ...f, clinicalFlags: current.filter((a) => a !== flag.id) }));
+                                        }
+                                      }}
+                                      className={isChecked ? selectedStyles : unselectedStyles}
+                                    >
+                                      {flag.conditionName}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           ))}
-                        </Accordion>
+                        </div>
                       </div>
                       
                       <div className="space-y-4">
@@ -2637,10 +2648,14 @@ export function ClientProfileView({
         </DialogContent>
       </Dialog>
 
-      <MachineInsightsModal
-        client={client}
-        machine={selectedInsightMachine}
-        onClose={() => setSelectedInsightMachine(null)}
+      <MachineSettingsDashboardModal
+        editingSettings={editingSettings}
+        setEditingSettings={setEditingSettings}
+        machines={machines}
+        exerciseLogs={allLogs}
+        sessions={sessions}
+        isSaving={isSavingSettings}
+        onSave={handleUpdateMachineSettings}
       />
 
       <Dialog

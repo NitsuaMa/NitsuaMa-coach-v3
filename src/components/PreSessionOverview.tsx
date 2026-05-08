@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Play, History, AlertTriangle, Activity, Settings2, Check, Loader2, Dumbbell, Calendar, Target, Edit3, X } from 'lucide-react';
+import { Play, History, AlertTriangle, Activity, Settings2, Check, Loader2, Dumbbell, Calendar, Target, Edit3, X, GripVertical } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { SessionRoutineManagerModal } from './SessionRoutineManagerModal';
 import { MACHINE_LIST } from '../data/machine-database';
 import { CLINICAL_FLAGS_MATRIX } from '../data/clinical-matrix';
 import { Client, Machine, ExerciseLog, Routine, WorkoutSession, TrainerFocus, SessionNote, Trainer, FocusRecord } from '../types';
@@ -44,7 +43,6 @@ export function PreSessionOverview({
   const [selectedRoutineType, setSelectedRoutineType] = useState<'A' | 'B' | 'Free' | 'Create_A' | 'Create_B'>('A');
   const [adjustedMachineIds, setAdjustedMachineIds] = useState<string[]>([]);
   const [adjustmentNote, setAdjustmentNote] = useState('');
-  const [isRoutineManagerOpen, setIsRoutineManagerOpen] = useState(false);
   const [isAdjusting, setIsAdjusting] = useState(false);
   
   const [newNoteContent, setNewNoteContent] = useState('');
@@ -74,6 +72,38 @@ export function PreSessionOverview({
       else setAdjustedMachineIds(targetRoutine?.machineIds || routineA?.machineIds || []);
     }
   }, [targetRoutine, routineA, routineB]);
+
+  const onDragStart = (e: React.DragEvent, index: number) => {
+    e.dataTransfer.setData('text/plain', index.toString());
+  };
+
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const onDrop = (e: React.DragEvent, dropIndex: number) => {
+    const dragIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+    if (dragIndex === dropIndex) return;
+
+    const newSequence = [...adjustedMachineIds];
+    const [draggedItem] = newSequence.splice(dragIndex, 1);
+    newSequence.splice(dropIndex, 0, draggedItem);
+    
+    setAdjustedMachineIds(newSequence);
+    setIsAdjusting(true);
+  };
+  
+  const removeMachine = (index: number) => {
+    const newSequence = [...adjustedMachineIds];
+    newSequence.splice(index, 1);
+    setAdjustedMachineIds(newSequence);
+    setIsAdjusting(true);
+  };
+  
+  const addMachine = (machineId: string) => {
+    setAdjustedMachineIds([...adjustedMachineIds, machineId]);
+    setIsAdjusting(true);
+  };
 
   const handleSaveNote = async () => {
     if (!newNoteContent.trim() || !authTrainer) return;
@@ -157,79 +187,48 @@ export function PreSessionOverview({
   return (
     <div className="flex-1 flex flex-col gap-6 p-6 md:p-8 h-full overflow-y-auto bg-[#0A2E46] text-[#F8F9FA] custom-scrollbar pb-32">
       
-      {/* 1. Header & Main Action */}
-      <div className="flex items-start justify-between">
+      {/* 1. Hero Identity & Clinical Flags (Top Section) */}
+      <div className="bg-slate-900 border-b border-slate-800 p-6 flex flex-col md:flex-row justify-between items-start md:items-center rounded-[2.5rem] gap-4 shadow-xl">
         <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black uppercase tracking-tighter text-white">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black uppercase tracking-tighter text-white leading-none">
               {client.firstName} {client.lastName}
             </h2>
+            <div className="text-sm font-bold tracking-widest uppercase text-slate-400 mt-2">
+              Last Session: {lastSessionDate} • {lastRoutineName}
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {globalNotes && (
-              <div className="px-3 py-1 bg-blue-500/20 text-[#38BDF8] border border-[#38BDF8]/30 rounded-full flex items-center gap-2 shadow-sm">
-                <History className="w-4 h-4" />
-                <span className="text-xs font-black uppercase tracking-widest max-w-[400px] truncate">{globalNotes}</span>
-              </div>
-            )}
-          </div>
+          
+          {clientFlags.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mt-4">
+              {clientFlags.map((flag) => {
+                let selectedStyles = "bg-blue-950/50 border border-blue-500 text-blue-400 px-3 py-1.5 rounded-full text-xs font-medium shadow-[0_0_10px_rgba(59,130,246,0.1)]";
+                if (flag.severity === "Absolute Contraindication") {
+                  selectedStyles = "bg-rose-950/50 border border-rose-500 text-rose-400 px-3 py-1.5 rounded-full text-xs font-medium shadow-[0_0_10px_rgba(244,63,94,0.1)]";
+                } else if (flag.severity === "High Risk") {
+                  selectedStyles = "bg-amber-950/50 border border-amber-500 text-amber-400 px-3 py-1.5 rounded-full text-xs font-medium shadow-[0_0_10px_rgba(245,158,11,0.1)]";
+                }
+                const icon = flag.severity === "Absolute Contraindication" ? "🚨" : flag.severity === "High Risk" ? "⚠️" : "ℹ️";
+
+                return (
+                  <div key={flag.id} className={`${selectedStyles} flex items-center gap-1.5 whitespace-nowrap`}>
+                     <span>{icon}</span> {flag.conditionName}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-        <Button variant="outline" onClick={onCancel} className="px-5 rounded-2xl font-bold uppercase text-[10px] tracking-widest bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300 h-10 shadow-sm transition-all hover:text-white">
+        <Button variant="outline" onClick={onCancel} className="px-5 rounded-2xl font-bold uppercase text-[10px] tracking-widest bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300 h-10 shadow-sm transition-all hover:text-white shrink-0">
           <X className="w-4 h-4 mr-2" /> Cancel
         </Button>
       </div>
 
-      {clientFlags.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-rose-500" /> Clinical Safety Briefing
-          </h3>
-          <div className="grid grid-cols-1 gap-3">
-            {clientFlags.map(flag => {
-              const bgColors = {
-                "Absolute Contraindication": "bg-rose-950/30 border-rose-600 animate-in fade-in zoom-in duration-500",
-                "High Risk": "bg-amber-950/30 border-amber-500",
-                "Moderate / Needs Modification": "bg-blue-950/30 border-blue-500"
-              };
-              const textColors = {
-                "Absolute Contraindication": "text-rose-400",
-                "High Risk": "text-amber-400",
-                "Moderate / Needs Modification": "text-blue-400"
-              };
-              return (
-                <div key={flag.id} className={`p-4 rounded-xl border-2 shadow-lg ${bgColors[flag.severity]} ${flag.severity === 'Absolute Contraindication' ? 'shadow-rose-900/20' : ''}`}>
-                  <div className="flex items-center gap-3 mb-2">
-                    <Badge variant="outline" className={`font-black uppercase tracking-widest text-[10px] ${textColors[flag.severity]} border-current`}>
-                      {flag.severity}
-                    </Badge>
-                    <span className="font-bold text-white text-sm uppercase tracking-wider">{flag.conditionName}</span>
-                  </div>
-                  <ul className="space-y-2 mt-3">
-                    {flag.protocolHandling.map((ph, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-sm text-slate-200">
-                        <span className={`mt-1 font-bold ${textColors[flag.severity]}`}>•</span>
-                        <div className="flex-1 leading-snug">
-                          {ph.instruction}
-                          {ph.setupModification && (
-                            <div className="mt-1 font-mono text-[10px] uppercase text-emerald-400 bg-emerald-950/30 p-1.5 rounded-md border border-emerald-900/50 inline-block">
-                              Setup Mod: {ph.setupModification}
-                            </div>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Legacy / Medical History Catchall */}
-      {(orthopedics || client.clinicalNotes) && (
+      {(orthopedics || client.clinicalNotes || globalNotes) && (
         <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
            <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Additional Medical Notes</h4>
+           {globalNotes && <p className="text-sm text-slate-300 font-medium mb-1"><span className="text-[#38BDF8] font-bold">Global:</span> {globalNotes}</p>}
            {orthopedics && <p className="text-sm text-slate-300 font-medium mb-1">{orthopedics}</p>}
            {client.clinicalNotes && <p className="text-sm text-slate-300 font-medium">{client.clinicalNotes}</p>}
         </div>
@@ -269,17 +268,9 @@ export function PreSessionOverview({
                 <Dumbbell className="w-5 h-5 text-slate-500" />
                 Execution Sequence
               </h3>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setIsRoutineManagerOpen(true)}
-                className="bg-transparent border-slate-700 hover:bg-slate-800 text-slate-300 font-bold tracking-widest uppercase text-[10px] rounded-xl h-8"
-              >
-                <Edit3 className="w-3.5 h-3.5 mr-2" /> Adjust Today
-              </Button>
             </div>
             
-            <div className="flex-1 space-y-3">
+            <div className="flex-1 flex flex-col space-y-2">
               {selectedRoutineIds.length === 0 ? (
                  <div className="flex flex-col items-center justify-center p-12 h-full opacity-50">
                    <p className="text-xs font-black uppercase tracking-widest text-[#68717A]">No machines selected</p>
@@ -290,31 +281,55 @@ export function PreSessionOverview({
                   const avgQ = getAverageQuality(mId);
                   
                   return (
-                    <div key={mId} className="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 flex items-center justify-between group hover:border-slate-500 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className="w-8 h-8 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0 shadow-inner">
-                          <span className="text-slate-400 font-black text-[10px]">{idx + 1}</span>
+                    <div 
+                      key={`${mId}-${idx}`} 
+                      draggable
+                      onDragStart={(e) => onDragStart(e, idx)}
+                      onDragOver={onDragOver}
+                      onDrop={(e) => onDrop(e, idx)}
+                      className="bg-slate-800 border border-slate-700 rounded-xl p-3 flex items-center justify-between group hover:border-slate-500 transition-colors cursor-move"
+                    >
+                      <div className="flex items-center gap-3">
+                        <GripVertical className="w-5 h-5 text-slate-500" />
+                        <div className="flex flex-col">
+                          <h4 className="text-sm font-black uppercase text-white truncate max-w-[200px] sm:max-w-xs">{machine?.name || mId}</h4>
+                          {avgQ ? (
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Avg: {avgQ.grade}</span>
+                          ) : (
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">No Data</span>
+                          )}
                         </div>
-                        <h4 className="text-sm font-black uppercase text-white truncate max-w-[200px] sm:max-w-xs">{machine?.name || mId}</h4>
                       </div>
                       
-                      {avgQ ? (
-                        <div className={`px-3 py-1.5 rounded-lg border ${avgQ.color} flex items-center gap-2 shrink-0`}>
-                          <span className="text-[10px] font-black uppercase tracking-widest">Avg Qly: {avgQ.grade}</span>
-                        </div>
-                      ) : (
-                        <div className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-500 flex items-center shrink-0">
-                          <span className="text-[10px] font-black uppercase tracking-widest">No Data</span>
-                        </div>
-                      )}
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); removeMachine(idx); }}
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-rose-400 hover:bg-rose-500/20 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
                   );
                 })
               )}
             </div>
 
+            {/* Quick-Add Bar */}
+            <div className="mt-6 pt-4 border-t border-slate-800 overflow-x-auto pb-2 custom-scrollbar">
+              <div className="flex gap-2">
+                {machines.filter(m => !selectedRoutineIds.includes(m.id!)).map(m => (
+                  <button
+                    key={m.id}
+                    onClick={() => addMachine(m.id!)}
+                    className="px-3 py-1.5 rounded-full border border-slate-700 text-slate-400 hover:border-[#F06C22] hover:text-[#F06C22] text-[10px] font-bold uppercase whitespace-nowrap transition-colors"
+                  >
+                    + {m.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* 4. Routine Action Controls (Bottom of List) */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 pt-6 border-t border-slate-800">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-slate-800">
                <button 
                  onClick={() => { setSelectedRoutineType('A'); setAdjustedMachineIds(routineA?.machineIds || []); }}
                  className={`p-3 rounded-xl font-black italic uppercase tracking-widest text-[10px] border transition-all ${
@@ -354,7 +369,7 @@ export function PreSessionOverview({
         <div className="lg:col-span-4 flex flex-col gap-6">
           
           {/* 5. Trainer Focuses & Active Directives */}
-          <div className="bg-slate-800 border border-slate-700 rounded-[2rem] p-6 shadow-lg">
+          <div className="bg-slate-900 border border-slate-800 rounded-[2rem] p-6 shadow-lg">
              <span className="text-[10px] font-black uppercase tracking-widest text-[#38BDF8] flex items-center gap-2 mb-4">
                <Activity className="w-3.5 h-3.5" /> 4 P's Directives
              </span>
@@ -364,7 +379,7 @@ export function PreSessionOverview({
              <div className="space-y-4">
                {focusRecords.filter(f => f.clientId === client.id && f.status === 'Active').length > 0 ? (
                  focusRecords.filter(f => f.clientId === client.id && f.status === 'Active').map(focus => (
-                    <div key={focus.id} className="bg-slate-900/80 p-4 rounded-2xl border border-slate-700 shadow-inner group transition-all hover:bg-slate-900">
+                    <div key={focus.id} className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50 shadow-inner group transition-all hover:bg-slate-800">
                       <div className="flex items-center justify-between mb-2">
                         <Badge className={`text-[8px] font-black uppercase italic tracking-widest px-2 py-0.5 rounded-lg ${
                           focus.category === 'Posture' ? 'bg-sky-500/20 text-sky-400 border-sky-500/30' :
@@ -397,10 +412,10 @@ export function PreSessionOverview({
 
                {/* Legacy TrainerFocuses (if any) */}
                {trainerFocuses.length > 0 && (
-                 <ul className="space-y-3 pt-2 border-t border-slate-700/50 mt-4">
+                 <ul className="space-y-3 pt-2 border-t border-slate-800 mt-4">
                    <p className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-600 mb-2">Extended Goals</p>
                    {trainerFocuses.map(focus => (
-                     <li key={focus.id} className="text-xs font-medium text-slate-400 bg-slate-900/30 p-3 rounded-xl border border-slate-700/50 leading-relaxed">
+                     <li key={focus.id} className="text-xs font-medium text-slate-400 bg-slate-800/30 p-3 rounded-xl border border-slate-700/50 leading-relaxed">
                        <span className="font-bold text-slate-500 block mb-1 uppercase tracking-tighter">{focus.category}</span>
                        {focus.notes}
                      </li>
@@ -411,7 +426,7 @@ export function PreSessionOverview({
           </div>
 
           {/* 6. Prioritized Notes (Moved to Bottom) */}
-          <div className="bg-[#0e171e] border border-slate-700/50 rounded-[2rem] p-6 shadow-xl flex-1 flex flex-col min-h-[400px]">
+          <div className="bg-slate-900 border border-slate-800 rounded-[2rem] p-6 shadow-lg flex-1 flex flex-col min-h-[400px]">
              <div className="flex justify-between items-center mb-4">
                <div>
                   <span className="text-[10px] font-black text-[#68717A] uppercase tracking-widest">Knowledge Base</span>
@@ -486,17 +501,6 @@ export function PreSessionOverview({
           </div>
         </div>
       </div>
-
-      <SessionRoutineManagerModal 
-        isOpen={isRoutineManagerOpen}
-        onOpenChange={setIsRoutineManagerOpen}
-        currentMachineIds={selectedRoutineIds}
-        machines={machines}
-        onSave={(newIds) => {
-          setAdjustedMachineIds(newIds);
-          setIsAdjusting(true);
-        }}
-      />
 
       {/* 7. The Anchor CTA */}
       <div className="fixed bottom-[100px] right-6 md:right-8 z-50">

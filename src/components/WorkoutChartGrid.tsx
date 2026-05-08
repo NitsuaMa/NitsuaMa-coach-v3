@@ -32,6 +32,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { LineChart, Line, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis } from 'recharts';
 import { 
   Dialog, 
   DialogContent, 
@@ -44,6 +45,7 @@ import { Client, Machine, WorkoutSession, ExerciseLog, ClientMachineSetting, Rou
 import { cn } from '@/lib/utils';
 import { OperationType, handleFirestoreError } from '../lib/firestore-errors';
 import { parseSessionDate } from '../lib/utils';
+import { MachineSettingsDashboardModal } from './MachineSettingsDashboardModal';
 
 interface WorkoutChartGridProps {
   clientId: string;
@@ -317,13 +319,16 @@ export function WorkoutChartGrid({
               return (
                 <tr key={machine.id} className="group hover:bg-slate-800/50 transition-colors h-[48px]">
                   {/* Sticky Machine Name & Settings (The Master Reference) */}
-                  <th className="sticky left-0 z-30 w-[180px] sm:w-[200px] bg-[#0A2E46] border-r border-slate-800 px-2.5 py-1 text-left group-hover:bg-slate-800/80 transition-colors shadow-[2px_0_10px_rgba(0,0,0,0.02)]">
+                  <th 
+                    onClick={() => setEditingSettings({ machineId: machine.id!, settings: { ...currentSettings } })}
+                    className="sticky left-0 z-30 w-[180px] sm:w-[200px] bg-[#0A2E46] border-r border-slate-800 px-2.5 py-1 text-left group-hover:bg-slate-800/80 transition-colors shadow-[2px_0_10px_rgba(0,0,0,0.02)] cursor-pointer hover:border-r-[#F06C22]"
+                  >
                     <div className="flex flex-col h-full justify-center space-y-0.5">
                       <div className="flex items-center gap-1.5">
                          <div className="w-4 h-4 rounded-md bg-slate-800 flex items-center justify-center shrink-0 shadow-sm shadow-zinc-200">
                             <Dumbbell className="w-2.5 h-2.5 text-white" />
                          </div>
-                         <h4 className="text-[10px] sm:text-[11px] font-black italic uppercase tracking-tighter text-white leading-tight truncate flex-1">
+                         <h4 className="text-[10px] sm:text-[11px] font-black italic uppercase tracking-tighter text-white leading-tight truncate flex-1 group-hover:text-[#F06C22] transition-colors">
                             {machine.name}
                             {clientSettings.find(s => s.machineId === machine.id)?.machineNotes?.some(n => n.isImportant) && (
                               <AlertCircle className="w-2.5 h-2.5 text-red-500 shrink-0 inline ml-1" />
@@ -331,11 +336,8 @@ export function WorkoutChartGrid({
                          </h4>
                       </div>
 
-                      {/* Settings Component - TAP TO EDIT */}
-                      <div 
-                        onClick={() => setEditingSettings({ machineId: machine.id!, settings: { ...currentSettings } })}
-                        className="flex flex-wrap gap-x-2 gap-y-0 bg-slate-900/50 px-1 py-0.5 rounded-md border border-slate-700 hover:border-[#F06C22]/40 hover:bg-[#0A2E46] transition-all cursor-pointer group/settings mt-0.5"
-                      >
+                      {/* Settings Component */}
+                      <div className="flex flex-wrap gap-x-2 gap-y-0 bg-slate-900/50 px-1 py-0.5 rounded-md border border-slate-700 transition-all group/settings mt-0.5">
                          {clientSettings.find(s => s.machineId === machine.id)?.settings && Object.entries(clientSettings.find(s => s.machineId === machine.id)?.settings || {}).map(([opt, val]) => (
                            <div key={opt} className="flex items-baseline gap-0.5">
                               <span className="text-[7px] font-black uppercase tracking-tighter text-slate-400 group-hover/settings:text-[#F06C22] transition-colors line-clamp-1 truncate max-w-[40px]">
@@ -422,55 +424,15 @@ export function WorkoutChartGrid({
       </footer>
 
       {/* SETTINGS EDITOR DIALOG */}
-      <Dialog open={!!editingSettings} onOpenChange={() => setEditingSettings(null)}>
-        <DialogContent className="max-w-2xl rounded-[40px] border-none shadow-2xl p-0 overflow-hidden">
-          <div className="bg-[#0e171e] p-10 flex items-center justify-between text-white">
-             <div>
-                <h2 className="text-3xl font-black italic uppercase tracking-tighter truncate max-w-[400px]">
-                   {machines.find(m => m.id === editingSettings?.machineId)?.name}
-                </h2>
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#F06C22] mt-2">Physical Configuration Mode</p>
-             </div>
-             <Settings className="w-10 h-10 text-white/20 animate-spin-slow" />
-          </div>
-
-          <div className="p-12 space-y-10 bg-[#0A2E46]">
-             <div className="grid grid-cols-2 gap-8">
-                {editingSettings && machines.find(m => m.id === editingSettings.machineId)?.settingOptions?.map(opt => (
-                   <div key={opt} className="space-y-4">
-                      <label className="text-xs font-black uppercase tracking-widest text-slate-500 ml-1">{opt}</label>
-                      <Input 
-                        value={editingSettings.settings[opt] || ''}
-                        onChange={(e) => setEditingSettings({
-                          ...editingSettings,
-                          settings: { ...editingSettings.settings, [opt]: e.target.value }
-                        })}
-                        placeholder="--"
-                        className="h-20 rounded-3xl border-2 border-slate-700 focus:border-[#F06C22] focus:ring-[#F06C22] text-2xl font-black text-white px-6 tabular-nums transition-all shadow-sm"
-                      />
-                   </div>
-                ))}
-             </div>
-
-             <div className="flex items-center gap-4 pt-6">
-                <Button 
-                  disabled={isSaving}
-                  onClick={handleUpdateSettings}
-                  className="flex-1 h-24 rounded-[32px] bg-[#0e171e] text-white font-black uppercase italic tracking-widest text-lg shadow-2xl active:scale-95 transition-all hover:bg-[#F06C22]"
-                >
-                  {isSaving ? 'Synchronizing...' : 'Update Master Settings'}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setEditingSettings(null)}
-                  className="h-24 px-10 rounded-[32px] border-2 font-black uppercase text-xs"
-                >
-                  Discard
-                </Button>
-             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <MachineSettingsDashboardModal
+        editingSettings={editingSettings}
+        setEditingSettings={setEditingSettings}
+        machines={machines}
+        exerciseLogs={exerciseLogs}
+        sessions={sessions}
+        isSaving={isSaving}
+        onSave={handleUpdateSettings}
+      />
     </div>
   );
 }

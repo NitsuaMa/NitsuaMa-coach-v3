@@ -115,6 +115,8 @@ export class InsightsAggregator {
       timeToTrend: [],
       machineEfficacy: [],
       retention: [],
+      strengthGainsByDemographic: [],
+      strengthGainsByMuscleGroup: [],
       summary: {
         totalCohortClients: 0,
         totalCohortSessions: 0,
