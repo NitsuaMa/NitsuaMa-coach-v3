@@ -9,13 +9,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { MACHINE_LIST } from '../data/machine-database';
 import { CLINICAL_FLAGS_MATRIX } from '../data/clinical-matrix';
 import { Client, Machine, ExerciseLog, Routine, WorkoutSession, TrainerFocus, SessionNote, Trainer, FocusRecord } from '../types';
+import { HistoricalMachinePerformance } from '../lib/historical-utils';
 
 interface PreSessionOverviewProps {
   authTrainer: Trainer | null;
   client: Client;
   targetRoutine: Routine | null;
   lastSession: WorkoutSession | null;
-  historicalLifts: Record<string, { last: ExerciseLog; previous: ExerciseLog | null }>;
+  historicalLifts: Record<string, HistoricalMachinePerformance>;
   onStart: (routineType: 'A' | 'B' | 'Free', customMachines?: string[], note?: string) => void;
   onCancel: () => void;
   routines: Routine[];
@@ -280,7 +281,11 @@ export function PreSessionOverview({
                 selectedRoutineIds.map((mId, idx) => {
                   const machine = machines.find(m => m.id === mId);
                   const avgQ = getAverageQuality(mId);
-                  const lastLog = historicalLifts[mId]?.last || logs.filter(l => l.machineId === mId).sort((a,b) => (b.createdAt as any)?.toMillis?.() - (a.createdAt as any)?.toMillis?.())[0];
+                  const perfData = historicalLifts[mId];
+                  const lastLog = perfData?.lastLog;
+                  const defaultWeight = perfData?.defaultStartingWeight;
+                  const lastSessionDate = perfData?.lastSessionDate;
+                  const wasPerformedInLastSession = lastSession && perfData?.lastSessionId === lastSession.id;
                   
                   return (
                     <div 
@@ -295,17 +300,28 @@ export function PreSessionOverview({
                         <GripVertical className="w-5 h-5 text-slate-500" />
                         <div className="flex flex-col">
                           <h4 className="text-sm font-black uppercase text-white truncate max-w-[200px] sm:max-w-xs">{machine?.name || mId}</h4>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            {lastLog ? (
-                              <span className="text-[10px] font-bold uppercase tracking-widest text-[#38BDF8]">
-                                Last: {lastLog.weight || 0} lbs × {lastLog.isStaticHold || lastLog.isTSC ? `${lastLog.seconds || 0}s` : `${lastLog.reps || 0}`}
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">No Previous Record</span>
-                            )}
-                            {avgQ && (
-                              <span className={`text-[10px] font-bold uppercase tracking-widest ${avgQ.color.split(' ')[0]}`}>
-                                • {avgQ.grade}
+                          <div className="flex flex-col mt-0.5 space-y-1">
+                            <div className="flex items-center gap-2">
+                              {lastLog ? (
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-[#38BDF8]">
+                                  Last: {lastLog.weight || 0} lbs × {lastLog.isStaticHold || lastLog.isTSC || (lastLog.seconds && (!lastLog.reps || parseInt(lastLog.reps) === 0)) ? `${lastLog.seconds || 0}s` : `${lastLog.reps || 0}`}
+                                </span>
+                              ) : defaultWeight !== null ? (
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-[#F06C22]">
+                                  Target Setup: {defaultWeight} lbs
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">No Previous Record</span>
+                              )}
+                              {avgQ && (
+                                <span className={`text-[10px] font-bold uppercase tracking-widest ${avgQ.color.split(' ')[0]}`}>
+                                  • {avgQ.grade}
+                                </span>
+                              )}
+                            </div>
+                            {lastLog && !wasPerformedInLastSession && lastSessionDate && (
+                              <span className="text-[9px] font-bold uppercase tracking-widest text-[#F06C22]">
+                                Last Performed on {lastSessionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}{perfData?.lastSessionNumber ? ` (Session ${perfData.lastSessionNumber})` : ''}
                               </span>
                             )}
                           </div>

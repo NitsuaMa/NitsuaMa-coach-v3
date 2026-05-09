@@ -4908,7 +4908,7 @@ function WorkoutTrackerView({
   const [preSessionSelectedRoutine, setPreSessionSelectedRoutine] = useState<RoutineType>('A');
   const [targetRoutine, setTargetRoutine] = useState<Routine | null>(null);
   const [isPaused, setIsPaused] = useState(false);
-  const [historicalLifts, setHistoricalLifts] = useState<Record<string, { last: ExerciseLog; previous: ExerciseLog | null }>>({});
+  const [historicalLifts, setHistoricalLifts] = useState<Record<string, import('./lib/historical-utils').HistoricalMachinePerformance>>({});
 
   const [machineTimeElapsed, setMachineTimeElapsed] = useState<number>(0);
 
@@ -5221,31 +5221,24 @@ function WorkoutTrackerView({
           setHistoricalLifts({}); // Reset before fetch
           
           const fetchAllLifts = async () => {
+            if (!selectedClient) return;
             try {
-              const logsQ = query(
-                collection(db, 'exerciseLogs'),
-                where('clientId', '==', clientId)
-              );
+              const historical: Record<string, import('./lib/historical-utils').HistoricalMachinePerformance> = {};
+              const { getLatestMachinePerformance } = await import('./lib/historical-utils');
               
-              const snap = await getDocs(logsQ);
-              const allRecentLogs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExerciseLog));
-              allRecentLogs.sort((a, b) => {
-                const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-                const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-                return timeB - timeA;
+              // We fetch historical data in parallel for all machines just in case they select something else
+              const machinePromises = machines.map(async (machine) => {
+                const mId = machine.id;
+                if (!mId) return;
+                historical[mId] = await getLatestMachinePerformance(
+                  clientId,
+                  mId,
+                  selectedClient,
+                  machine.name
+                );
               });
-              
-              const historical: Record<string, { last: ExerciseLog; previous: ExerciseLog | null }> = {};
-              
-              machines.forEach(m => {
-                const machineLogs = allRecentLogs.filter(l => l.machineId === m.id);
-                if (machineLogs.length > 0) {
-                  historical[m.id!] = { 
-                    last: machineLogs[0], 
-                    previous: machineLogs.length > 1 ? machineLogs[1] : null 
-                  };
-                }
-              });
+
+              await Promise.all(machinePromises);
               
               setHistoricalLifts(historical);
             } catch (err: any) {
@@ -5378,24 +5371,18 @@ function WorkoutTrackerView({
       }
 
       // 2. Fetch last logs to pre-fill weights
-      const lastLogsQuery = query(
-        collection(db, 'exerciseLogs'),
-        where('clientId', '==', clientId)
-      );
-      const lastLogsSnap = await getDocs(lastLogsQuery);
-      
-      const allLogs = lastLogsSnap.docs.map(l => l.data() as ExerciseLog);
-      allLogs.sort((a, b) => {
-        const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-        const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-        return timeB - timeA;
-      });
-      
+      // Check historicalLifts state first
       const machineLastLogs: Record<string, ExerciseLog> = {};
-      allLogs.forEach(data => {
-        const key = data.side ? `${data.machineId}_${data.side}` : data.machineId;
-        if (!machineLastLogs[key] && (data.weight || data.reps || data.seconds)) {
-          machineLastLogs[key] = data;
+      
+      // Look at all historicalLifts we previously fetched 
+      Object.values(historicalLifts).forEach((perfData: import('./lib/historical-utils').HistoricalMachinePerformance) => {
+        if (perfData.allLogsFromSession && perfData.allLogsFromSession.length > 0) {
+           perfData.allLogsFromSession.forEach(log => {
+             const key = log.side ? `${log.machineId}_${log.side}` : log.machineId;
+             if (!machineLastLogs[key] && (log.weight || log.reps || log.seconds)) {
+               machineLastLogs[key] = log;
+             }
+           });
         }
       });
 
@@ -5409,7 +5396,7 @@ function WorkoutTrackerView({
       if (activeMachineIds && activeMachineIds.length > 0) {
         const currentSettings = clientMachineSettings;
         
-        const createLogPayload = (prevLog: ExerciseLog | undefined, mId: string, side?: 'Left' | 'Right') => {
+        const createLogPayload = (prevLog: ExerciseLog | undefined, mId: string, side?: 'Left' | 'Right', defaultWeight?: number | null) => {
           const payload: any = {
             sessionId: docRef.id,
             clientId,
@@ -5425,6 +5412,8 @@ function WorkoutTrackerView({
             if (prevLog.isStaticHold !== undefined) payload.isStaticHold = prevLog.isStaticHold;
             if (prevLog.isTSC !== undefined) payload.isTSC = prevLog.isTSC;
             if (prevLog.repQuality) payload.repQuality = prevLog.repQuality;
+          } else if (defaultWeight) {
+            payload.weight = String(defaultWeight);
           }
           return payload;
         };
@@ -5432,23 +5421,24 @@ function WorkoutTrackerView({
         for (const mId of activeMachineIds) {
           const mac = machines.find(m => m.id === mId);
           const isTorsoMac = mac?.name.toLowerCase().includes('torso rotation');
+          const defaultWeight = historicalLifts[mId]?.defaultStartingWeight;
           
           if (isTorsoMac) {
             const prefilledLeft = machineLastLogs[`${mId}_Left`] || machineLastLogs[mId];
             const prefilledRight = machineLastLogs[`${mId}_Right`] || machineLastLogs[mId];
             
-            // Create Left set if there is history
-            if (prefilledLeft) {
-              await addDoc(collection(db, 'exerciseLogs'), createLogPayload(prefilledLeft, mId, 'Left'));
+            // Create Left set
+            if (prefilledLeft || defaultWeight) {
+              await addDoc(collection(db, 'exerciseLogs'), createLogPayload(prefilledLeft, mId, 'Left', defaultWeight));
             }
-            // Create Right set if there is history
-            if (prefilledRight) {
-              await addDoc(collection(db, 'exerciseLogs'), createLogPayload(prefilledRight, mId, 'Right'));
+            // Create Right set
+            if (prefilledRight || defaultWeight) {
+              await addDoc(collection(db, 'exerciseLogs'), createLogPayload(prefilledRight, mId, 'Right', defaultWeight));
             }
           } else {
             const prefilledLog = machineLastLogs[mId];
-            if (prefilledLog) {
-              await addDoc(collection(db, 'exerciseLogs'), createLogPayload(prefilledLog, mId));
+            if (prefilledLog || defaultWeight) {
+              await addDoc(collection(db, 'exerciseLogs'), createLogPayload(prefilledLog, mId, undefined, defaultWeight));
             }
           }
         }
