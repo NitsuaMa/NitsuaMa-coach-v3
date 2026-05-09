@@ -4889,6 +4889,8 @@ function WorkoutTrackerView({
   const [sessionNotes, setSessionNotes] = useState<SessionNote[]>([]);
   const [activeSessionNotes, setActiveSessionNotes] = useState<string>('');
   const lastMachineLoggedAt = React.useRef<number>(Date.now());
+  const pauseStartTime = React.useRef<number | null>(null);
+  const currentSegmentPauseDuration = React.useRef<number>(0);
   const [isEditingRoutine, setIsEditingRoutine] = useState(false);
   const [showRoutinePicker, setShowRoutinePicker] = useState(false);
   const [editingSettingsMachineId, setEditingSettingsMachineId] = useState<string | null>(null);
@@ -4922,23 +4924,53 @@ function WorkoutTrackerView({
         const logR = logs[`${currentSession.id}_${mId}_Right`];
         
         if (logL?.weight && (logL?.reps || logL?.seconds) && logL?.repQuality && !logL?.timeSpent) {
-          const timeDiff = Math.floor((Date.now() - lastMachineLoggedAt.current) / 1000);
-          updateLog(currentSession.id, mId, 'timeSpent', timeDiff.toString(), 'Left');
+          const rawTimeDiff = Math.floor((Date.now() - lastMachineLoggedAt.current) / 1000);
+          const timeDiff = Math.max(0, Math.floor((Date.now() - lastMachineLoggedAt.current - currentSegmentPauseDuration.current) / 1000));
+          const isStatic = logL.isStaticHold || logL.isTSC || (logL.seconds && (!logL.reps || parseInt(logL.reps) === 0));
+          const reps = parseInt(logL.reps || '0');
+          const avgTime = (!isStatic && reps > 0) ? parseFloat((timeDiff / reps).toFixed(1)) : undefined;
+
+          updateLogMultiple(currentSession.id, mId, { 
+            timeSpent: rawTimeDiff.toString(),
+            totalTimeUnderLoad: timeDiff,
+            ...(avgTime !== undefined && { averageTimePerRep: avgTime })
+          }, 'Left');
           lastMachineLoggedAt.current = Date.now();
+          currentSegmentPauseDuration.current = 0;
           didUpdate = true;
         }
         if (logR?.weight && (logR?.reps || logR?.seconds) && logR?.repQuality && !logR?.timeSpent) {
-          const timeDiff = Math.floor((Date.now() - lastMachineLoggedAt.current) / 1000);
-          updateLog(currentSession.id, mId, 'timeSpent', timeDiff.toString(), 'Right');
+          const rawTimeDiff = Math.floor((Date.now() - lastMachineLoggedAt.current) / 1000);
+          const timeDiff = Math.max(0, Math.floor((Date.now() - lastMachineLoggedAt.current - currentSegmentPauseDuration.current) / 1000));
+          const isStatic = logR.isStaticHold || logR.isTSC || (logR.seconds && (!logR.reps || parseInt(logR.reps) === 0));
+          const reps = parseInt(logR.reps || '0');
+          const avgTime = (!isStatic && reps > 0) ? parseFloat((timeDiff / reps).toFixed(1)) : undefined;
+
+          updateLogMultiple(currentSession.id, mId, { 
+            timeSpent: rawTimeDiff.toString(),
+            totalTimeUnderLoad: timeDiff,
+            ...(avgTime !== undefined && { averageTimePerRep: avgTime })
+          }, 'Right');
           lastMachineLoggedAt.current = Date.now();
+          currentSegmentPauseDuration.current = 0;
           didUpdate = true;
         }
       } else {
         const log = logs[`${currentSession.id}_${mId}`];
         if (log?.weight && (log?.reps || log?.seconds) && log?.repQuality && !log?.timeSpent) {
-          const timeDiff = Math.floor((Date.now() - lastMachineLoggedAt.current) / 1000);
-          updateLog(currentSession.id, mId, 'timeSpent', timeDiff.toString());
+          const rawTimeDiff = Math.floor((Date.now() - lastMachineLoggedAt.current) / 1000);
+          const timeDiff = Math.max(0, Math.floor((Date.now() - lastMachineLoggedAt.current - currentSegmentPauseDuration.current) / 1000));
+          const isStatic = log.isStaticHold || log.isTSC || (log.seconds && (!log.reps || parseInt(log.reps) === 0));
+          const reps = parseInt(log.reps || '0');
+          const avgTime = (!isStatic && reps > 0) ? parseFloat((timeDiff / reps).toFixed(1)) : undefined;
+
+          updateLogMultiple(currentSession.id, mId, { 
+            timeSpent: rawTimeDiff.toString(),
+            totalTimeUnderLoad: timeDiff,
+            ...(avgTime !== undefined && { averageTimePerRep: avgTime })
+          });
           lastMachineLoggedAt.current = Date.now();
+          currentSegmentPauseDuration.current = 0;
           didUpdate = true;
         }
       }
@@ -4950,9 +4982,27 @@ function WorkoutTrackerView({
   }, [logs, currentSession, activeMachineIds]);
 
   useEffect(() => {
+    if (!currentSession) return;
+    if (isPaused) {
+      if (!pauseStartTime.current) {
+        pauseStartTime.current = Date.now();
+      }
+    } else {
+      if (pauseStartTime.current) {
+        currentSegmentPauseDuration.current += (Date.now() - pauseStartTime.current);
+        pauseStartTime.current = null;
+      }
+    }
+  }, [isPaused, currentSession]);
+
+  useEffect(() => {
     if (!currentSession || isPaused) return;
     const interval = setInterval(() => {
-      setMachineTimeElapsed(Math.floor((Date.now() - lastMachineLoggedAt.current) / 1000));
+      let extraPause = 0;
+      if (isPaused && pauseStartTime.current) {
+        extraPause = Date.now() - pauseStartTime.current;
+      }
+      setMachineTimeElapsed(Math.max(0, Math.floor((Date.now() - lastMachineLoggedAt.current - currentSegmentPauseDuration.current - extraPause) / 1000)));
     }, 1000);
     return () => clearInterval(interval);
   }, [currentSession, isPaused]);
@@ -5609,20 +5659,24 @@ function WorkoutTrackerView({
   const [editingWeightSide, setEditingWeightSide] = useState<'Left' | 'Right' | undefined>(undefined);
 
   const updateLog = (sessionId: string, machineId: string, field: keyof ExerciseLog, value: any, side?: 'Left' | 'Right') => {
+    updateLogMultiple(sessionId, machineId, { [field]: value }, side);
+  };
+
+  const updateLogMultiple = (sessionId: string, machineId: string, updates: Partial<ExerciseLog>, side?: 'Left' | 'Right') => {
     const key = `${sessionId}_${machineId}${side ? '_' + side : ''}`;
     const currentSettings = clientMachineSettings[machineId]?.settings || {};
 
     setLogs(prev => {
       const existing = prev[key];
       const updatedLog: ExerciseLog = existing 
-        ? { ...existing, [field]: value, machineSettings: currentSettings }
+        ? { ...existing, ...updates, machineSettings: currentSettings }
         : { 
             id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`, // Temporary ID for local state
             sessionId, 
             clientId, 
             machineId, 
             ...(side ? { side } : {}),
-            [field]: value, 
+            ...updates,
             machineSettings: currentSettings,
             createdAt: Timestamp.now()
           } as any;

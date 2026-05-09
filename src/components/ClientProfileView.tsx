@@ -38,6 +38,7 @@ import {
   Maximize2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
 import { MachineSettingsDashboardModal } from "./MachineSettingsDashboardModal";
 import {
   Card,
@@ -448,16 +449,16 @@ export function ClientProfileView({
     if (
       activeTab !== "overview" &&
       activeTab !== "history" &&
-      activeTab !== "timing"
+      activeTab !== "statistics"
     ) {
       return;
     }
 
+    // Full history for everything
     const sessionsQuery = query(
       collection(db, "sessions"),
       where("clientId", "==", clientId),
-      orderBy("date", "desc"),
-      limit(activeTab === "overview" ? 5 : sessionLimit),
+      orderBy("date", "desc")
     );
 
     const unsubSessions = onSnapshot(sessionsQuery, async (sessionSnap) => {
@@ -1061,10 +1062,10 @@ export function ClientProfileView({
               Reports
             </TabsTrigger>
             <TabsTrigger
-              value="timing"
+              value="statistics"
               className="flex-1 min-w-[80px] rounded-full border border-slate-200 h-[26px] px-3 font-black uppercase text-[9px] tracking-widest text-[#68717A] bg-transparent data-[state=active]:border-transparent data-[state=active]:bg-[#115E8D] data-[state=active]:text-white transition-all data-[state=active]:shadow-sm"
             >
-              Timing
+              Statistics
             </TabsTrigger>
             <TabsTrigger
               value="details"
@@ -1601,7 +1602,130 @@ export function ClientProfileView({
           </Card>
         </TabsContent>
 
-        <TabsContent value="timing">
+        <TabsContent value="statistics" className="space-y-6">
+          {/* 60-Day Overall Growth Chart */}
+          {(() => {
+            const sixtyDaysAgo = new Date();
+            sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+            const machineBaselines: Record<string, number> = {};
+            const currentWeights: Record<string, number> = {};
+            const dailyIncreases: Record<string, { totalInc: number, count: number, dateStr: string }> = {};
+
+            const allLogsSorted = [...allLogs].sort((a,b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
+            
+            allLogsSorted.forEach(l => {
+              const w = parseInt(l.weight || "0");
+              if (w > 0) {
+                if (!machineBaselines[l.machineId]) {
+                  machineBaselines[l.machineId] = w;
+                }
+                currentWeights[l.machineId] = w;
+              }
+              
+              const time = l.createdAt?.toMillis?.() || 0;
+              if (time >= sixtyDaysAgo.getTime()) {
+                const session = sessions.find(s => s.id === l.sessionId);
+                if (session) {
+                  let totalPct = 0;
+                  let count = 0;
+                  for (const mId in currentWeights) {
+                     const base = machineBaselines[mId];
+                     const curr = currentWeights[mId];
+                     if (base > 0) {
+                       totalPct += ((curr - base) / base) * 100;
+                       count++;
+                     }
+                  }
+                  const avgPct = count > 0 ? (totalPct / count) : 0;
+                  const dateStr = session.date ? new Date(parseSessionDate(session.date)).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+                  if (dateStr) {
+                    dailyIncreases[session.id!] = { totalInc: avgPct, count: 1, dateStr };
+                  }
+                }
+              }
+            });
+
+            const growthChartData = Object.values(dailyIncreases).map(d => ({
+              date: d.dateStr,
+              increase: Math.round(d.totalInc * 10) / 10
+            }));
+
+            const CustomGrowthTooltip = ({ active, payload }: any) => {
+              if (active && payload && payload.length) {
+                const data = payload[0].payload;
+                return (
+                  <div className="bg-[#0A2E46] border border-slate-700 p-3 rounded-lg shadow-xl">
+                    <p className="text-[10px] uppercase tracking-widest text-[#68717A] mb-1">{data.date}</p>
+                    <p className="text-[#F06C22] font-black text-xl leading-none">+{data.increase}%</p>
+                  </div>
+                );
+              }
+              return null;
+            };
+
+            return (
+              <Card className="rounded-[40px] border-2 shadow-xl overflow-hidden bg-[#0A2E46] border-[#0A2E46]">
+                <CardHeader className="p-8 border-b border-[#0A2E46]/80 bg-slate-900/40">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <CardTitle className="text-xl font-black uppercase tracking-widest text-slate-300">
+                        Overall Strength Progression
+                      </CardTitle>
+                      <CardDescription className="text-xs font-bold uppercase tracking-widest mt-2 text-[#F06C22]">
+                        60-Day Global Aggregate (% Increase)
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-8 h-[350px]">
+                  {growthChartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={growthChartData} margin={{ top: 20, right: 20, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorIncrease" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#F06C22" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#0A2E46" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <XAxis 
+                          dataKey="date" 
+                          stroke="#68717A" 
+                          tick={{ fill: "#68717A", fontSize: 10, fontWeight: 700 }} 
+                          tickMargin={10} 
+                          axisLine={false} 
+                          tickLine={false} 
+                        />
+                        <YAxis 
+                          stroke="#68717A" 
+                          tick={{ fill: "#68717A", fontSize: 10 }} 
+                          axisLine={false} 
+                          tickLine={false}
+                          tickFormatter={(val) => `+${val}%`}
+                        />
+                        <RechartsTooltip content={<CustomGrowthTooltip />} />
+                        <Area 
+                          type="monotone" 
+                          dataKey="increase" 
+                          stroke="#F06C22" 
+                          strokeWidth={4}
+                          fillOpacity={1} 
+                          fill="url(#colorIncrease)" 
+                          activeDot={{ r: 6, fill: "#fff", stroke: "#F06C22", strokeWidth: 2 }}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center opacity-30">
+                      <TrendingUp className="w-12 h-12 text-[#68717A] mb-4" />
+                      <p className="text-xs font-black uppercase tracking-widest text-[#68717A]">Not enough data in the last 60 days</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           <Card className="rounded-[40px] border-2 shadow-xl overflow-hidden min-h-[400px]">
             <CardHeader className="p-8 border-b bg-muted/20">
               <div className="flex justify-between items-center">
@@ -1760,14 +1884,6 @@ export function ClientProfileView({
                           const machine = machines.find(
                             (m) => m.id === log.machineId,
                           );
-                          const logTime =
-                            log.updatedAt?.toMillis?.() ||
-                            log.createdAt?.toMillis?.();
-                          const prevTime =
-                            idx === 0
-                              ? startTime
-                              : sessionLogs[idx - 1].updatedAt?.toMillis?.() ||
-                                sessionLogs[idx - 1].createdAt?.toMillis?.();
 
                           let durationStr = "---";
                           if (log.timeSpent) {
@@ -1777,39 +1893,55 @@ export function ClientProfileView({
                               const secs = secsTotal % 60;
                               durationStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
                             }
-                          } else if (logTime && prevTime) {
-                            const durationMs = logTime - prevTime;
-                            const mins = Math.floor(durationMs / 60000);
-                            const secs = Math.floor((durationMs % 60000) / 1000);
-                            durationStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
                           }
+
+                          const isStatic = log.isStaticHold || log.isTSC || (log.seconds && (!log.reps || parseInt(log.reps) === 0));
 
                           return (
                             <div
                               key={log.id}
-                              className="flex items-center justify-between p-6 rounded-3xl bg-muted/20 border border-transparent hover:border-primary/20 hover:bg-white transition-all shadow-sm"
+                              className="flex items-center justify-between p-6 rounded-3xl bg-[#0A2E46] border border-slate-700 hover:border-[#F06C22]/50 transition-all shadow-sm"
                             >
                               <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center shadow-sm">
-                                  <Dumbbell className="w-5 h-5 text-primary" />
+                                <div className="w-10 h-10 rounded-2xl bg-slate-800 flex items-center justify-center shadow-sm">
+                                  <Dumbbell className="w-5 h-5 text-[#F06C22]" />
                                 </div>
                                 <div>
-                                  <p className="text-sm font-black uppercase tracking-tight">
+                                  <p className="text-sm font-black uppercase tracking-tight text-white">
                                     {machine?.name || "Unknown"}
                                   </p>
                                   <div className="flex items-center gap-2 mt-1">
-                                    <p className="text-[9px] font-bold text-muted-foreground uppercase opacity-60">
-                                      {idx === 0
-                                        ? "Since Start"
-                                        : "From Prev Unit"}
+                                    <p className="text-[9px] font-bold text-[#68717A] uppercase">
+                                      Load Interval
                                     </p>
                                   </div>
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <p className="text-lg font-black italic text-primary leading-none">
-                                  {durationStr}
-                                </p>
+                              <div className="text-right flex flex-col justify-center">
+                                {log.totalTimeUnderLoad !== undefined ? (
+                                  <>
+                                    {isStatic ? (
+                                      <p className="text-sm font-black text-[#F06C22] uppercase tracking-widest leading-none">
+                                        Static Time Under Load: {log.totalTimeUnderLoad} sec
+                                      </p>
+                                    ) : (
+                                      <>
+                                        <p className="text-sm font-black text-[#F06C22] uppercase tracking-widest leading-none">
+                                          Dynamic Time Under Load: {log.totalTimeUnderLoad} sec
+                                        </p>
+                                        {log.averageTimePerRep !== undefined && (
+                                          <p className="text-[10px] font-bold text-[#68717A] uppercase tracking-widest mt-1 text-right">
+                                            Avg Time/Rep: {log.averageTimePerRep} sec
+                                          </p>
+                                        )}
+                                      </>
+                                    )}
+                                  </>
+                                ) : (
+                                  <p className="text-lg font-black italic text-[#F06C22] leading-none">
+                                    {durationStr}
+                                  </p>
+                                )}
                               </div>
                             </div>
                           );

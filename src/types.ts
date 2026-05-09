@@ -200,6 +200,8 @@ export interface ExerciseLog {
   isTSC?: boolean;
   repQuality?: RepQuality;
   timeSpent?: string;
+  totalTimeUnderLoad?: number;
+  averageTimePerRep?: number;
   side?: 'Left' | 'Right';
   notes?: string;
   machineSettings?: Record<string, string>; // Settings used for this specific set

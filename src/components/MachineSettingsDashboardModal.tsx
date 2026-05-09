@@ -2,8 +2,8 @@ import React from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Settings, X } from "lucide-react";
-import { LineChart, Line, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis } from "recharts";
+import { Settings, X, TrendingUp } from "lucide-react";
+import { ComposedChart, Bar, Line, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Machine, ExerciseLog, WorkoutSession } from "../types";
 import { parseSessionDate } from "../lib/utils";
 
@@ -30,50 +30,78 @@ export function MachineSettingsDashboardModal({
   const mId = editingSettings.machineId;
   const targetMachine = machines.find((m) => m.id === mId);
 
+  // Filter logs for this machine
+  const machineLogs = exerciseLogs
+    .filter((l) => l.machineId === mId && (parseInt(l.weight || "0") > 0))
+    .sort((a, b) => a.createdAt.toDate().getTime() - b.createdAt.toDate().getTime());
+
+  // Current weight is from the last log
+  const currentLog = machineLogs.length > 0 ? machineLogs[machineLogs.length - 1] : null;
+  const currentWeight = currentLog ? parseInt(currentLog.weight || "0") || 0 : 0;
+
   // Calculate PR
-  const machineLogs = exerciseLogs.filter(
-    (l) => l.machineId === mId && parseInt(l.reps || "0") > 0
-  );
-  const pr = machineLogs.reduce(
-    (max, l) => Math.max(max, parseInt(l.weight || "0") || 0),
-    0
-  );
+  let prLog = null;
+  let maxWeight = 0;
+  for (const log of machineLogs) {
+    const w = parseInt(log.weight || "0") || 0;
+    if (w > maxWeight) {
+      maxWeight = w;
+      prLog = log;
+    }
+  }
 
-  // Calculate Trajectory
-  const recentLogs = [...machineLogs]
-    .sort((a, b) => b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime())
-    .slice(0, 6);
-  const lastLog = recentLogs[0];
-  const previousLogs = recentLogs.slice(1, 6);
-  const prevAvg =
-    previousLogs.length > 0
-      ? previousLogs.reduce((sum, l) => sum + (parseInt(l.weight || "0") || 0), 0) /
-        previousLogs.length
-      : 0;
-  const percentChange =
-    prevAvg > 0 && lastLog
-      ? Math.round(((parseInt(lastLog.weight || "0") || 0) - prevAvg) / prevAvg * 100)
-      : 0;
-  const isPositive = percentChange >= 0;
+  const prSessionDate = prLog 
+    ? sessions.find(s => s.id === prLog.sessionId)?.date || ""
+    : "";
+  const prDisplayDate = prSessionDate ? new Date(parseSessionDate(prSessionDate)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
 
-  // Calculate Trend Data (last 10 sessions)
-  const trendData = sessions
-    .slice(0, 10)
-    .reverse()
-    .map((session) => {
-      const log = exerciseLogs.find(
-        (l) => l.machineId === mId && l.sessionId === session.id
+  // Calculate Trend Data (Weight Changes Only)
+  const trendData = [];
+  let lastWeight = -1;
+
+  for (const log of machineLogs) {
+    const weight = parseInt(log.weight || "0") || 0;
+    if (weight !== lastWeight && weight > 0) {
+      const session = sessions.find(s => s.id === log.sessionId);
+      if (session) {
+        trendData.push({
+          sessionDate: new Date(parseSessionDate(session.date)).toLocaleDateString(
+            "en-US",
+            { month: "short", day: "2-digit" }
+          ),
+          weight,
+          reps: log.reps, // for the tooltip
+          seconds: log.seconds,
+          isStatic: log.isStaticHold || log.isTSC || (log.seconds && (!log.reps || parseInt(log.reps) === 0)),
+          dateStr: session.date
+        });
+        lastWeight = weight;
+      }
+    }
+  }
+
+  // Use all history for the chart
+  const chartData = trendData;
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-[#0f172a] border border-[#1e293b] p-3 rounded-lg shadow-xl">
+          <p className="text-[10px] uppercase tracking-widest text-[#68717A] mb-1">{data.sessionDate}</p>
+          <div className="flex items-end gap-2">
+            <p className="text-[#F06C22] font-black text-xl leading-none">{data.weight} <span className="text-xs">LBS</span></p>
+          </div>
+          {data.isStatic ? (
+            <p className="text-white font-bold text-sm mt-1">Hold: {data.seconds}s</p>
+          ) : (
+            <p className="text-white font-bold text-sm mt-1">Reps: {data.reps}</p>
+          )}
+        </div>
       );
-      const weight = parseInt(log?.weight || "0") || 0;
-      const reps = parseInt(log?.reps || "0") || 0;
-      return {
-        sessionDate: new Date(parseSessionDate(session.date)).toLocaleDateString(
-          "en-US",
-          { month: "short", day: "2-digit" }
-        ),
-        weight: reps > 0 ? weight : null,
-      };
-    });
+    }
+    return null;
+  };
 
   return (
     <Dialog
@@ -82,36 +110,55 @@ export function MachineSettingsDashboardModal({
     >
       <DialogContent className="max-w-[800px] rounded-3xl border border-slate-700 shadow-[0_0_50px_rgba(0,0,0,0.5)] p-0 overflow-hidden bg-[#0A2E46] backdrop-blur-md">
         {/* Hero Header */}
-        <div className="bg-slate-900 border-b border-slate-800 p-6 flex flex-col justify-between relative">
+        <div className="bg-[#0A2E46] border-b border-slate-800 p-6 flex flex-col justify-between relative">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setEditingSettings(null)}
-            className="absolute top-4 right-4 rounded-full text-slate-400 hover:text-white hover:bg-slate-800"
+            className="absolute top-4 right-4 rounded-full text-[#68717A] hover:text-white hover:bg-slate-800"
           >
             <X className="w-5 h-5" />
           </Button>
           <div>
-            <h2 className="text-xl font-bold uppercase tracking-widest text-slate-400 mb-2">
+            <h2 className="text-xl font-bold uppercase tracking-widest text-[#68717A] mb-2">
               {targetMachine?.name}
             </h2>
-            <div className="flex flex-wrap items-end gap-4">
-              <div className="text-4xl sm:text-5xl font-black text-[#F06C22] leading-none tracking-tighter">
-                {pr > 0 ? `${pr} LBS` : "---"}
-                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-[#F06C22]/50 ml-3 relative -top-3 sm:-top-4">
-                  Personal Record
+            <div className="flex flex-col gap-1">
+              <div className="text-5xl sm:text-6xl font-black text-[#F06C22] leading-none tracking-tighter mt-2">
+                {currentWeight > 0 ? `${currentWeight} LBS` : "---"}
+                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-[#F06C22]/50 ml-3 relative -top-4 sm:-top-5">
+                  Current Weight
                 </span>
               </div>
-              {percentChange !== 0 && (
-                <div
-                  className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest mb-1.5 ${
-                    isPositive
-                      ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                      : "bg-slate-800 text-slate-400 border border-slate-700"
-                  }`}
-                >
-                  {isPositive ? "+" : ""}
-                  {percentChange}% Trend
+              {prLog && (
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <div className="px-3 py-1.5 bg-[#1e293b] rounded-md border border-slate-700 inline-flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-emerald-400" />
+                    <span className="text-emerald-400 font-bold text-sm">PR: {maxWeight} LBS</span>
+                    <span className="text-[#68717A] font-medium text-xs">× {prLog.reps} reps</span>
+                    {prDisplayDate && <span className="text-[#68717A] text-[10px] uppercase tracking-widest ml-2">({prDisplayDate})</span>}
+                  </div>
+                  
+                  {currentLog?.totalTimeUnderLoad !== undefined && (
+                    <div className="px-3 py-1.5 bg-[#1e293b] rounded-md border border-slate-700 flex flex-col justify-center">
+                      {(currentLog.isStaticHold || currentLog.isTSC || (currentLog.seconds && (!currentLog.reps || parseInt(currentLog.reps) === 0))) ? (
+                        <span className="text-[#F06C22] font-bold text-xs uppercase tracking-widest">
+                          Static Time Under Load: {currentLog.totalTimeUnderLoad} sec
+                        </span>
+                      ) : (
+                        <div className="flex flex-col">
+                          <span className="text-[#F06C22] font-bold text-xs uppercase tracking-widest">
+                            Dynamic Time Under Load: {currentLog.totalTimeUnderLoad} sec
+                          </span>
+                          {currentLog.averageTimePerRep !== undefined && (
+                            <span className="text-[#68717A] font-medium text-[10px] uppercase tracking-widest mt-0.5">
+                              Avg Time/Rep: {currentLog.averageTimePerRep} sec
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -121,41 +168,34 @@ export function MachineSettingsDashboardModal({
         {/* Trend Visualization (Middle Section) */}
         <div className="p-6 bg-[#0A2E46] border-b border-slate-800">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-400">
-              Load Progression (Last 10 Sessions)
+            <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-[#68717A]">
+              Load Progression
             </h3>
           </div>
-          <div className="h-[160px] w-full">
+          <div className="h-[200px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={trendData}
+              <ComposedChart
+                data={chartData}
                 margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
               >
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                 <XAxis
                   dataKey="sessionDate"
-                  stroke="#475569"
-                  tick={{ fill: "#475569", fontSize: 10, fontWeight: 700 }}
+                  stroke="#68717A"
+                  tick={{ fill: "#68717A", fontSize: 10, fontWeight: 700 }}
                   tickMargin={10}
                   axisLine={false}
                   tickLine={false}
                 />
-                <RechartsTooltip
-                  contentStyle={{
-                    backgroundColor: "#0f172a",
-                    border: "1px solid #1e293b",
-                    borderRadius: "8px",
-                    color: "#fff",
-                  }}
-                  itemStyle={{ color: "#F06C22", fontWeight: 900 }}
-                  labelStyle={{
-                    color: "#94a3b8",
-                    fontSize: "10px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                    marginBottom: "4px",
-                  }}
-                  formatter={(value: any) => [`${value} lbs`, "Load"]}
+                <YAxis
+                  stroke="#68717A"
+                  tick={{ fill: "#68717A", fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  domain={['dataMin - 10', 'dataMax + 10']}
                 />
+                <RechartsTooltip content={<CustomTooltip />} cursor={{fill: '#1e293b', opacity: 0.4}} />
+                <Bar dataKey="weight" fill="#1e293b" radius={[4, 4, 0, 0]} maxBarSize={40} />
                 <Line
                   type="monotone"
                   dataKey="weight"
@@ -163,37 +203,36 @@ export function MachineSettingsDashboardModal({
                   strokeWidth={3}
                   dot={{ fill: "#F06C22", strokeWidth: 2, r: 4 }}
                   activeDot={{ r: 6, fill: "#fff", stroke: "#F06C22" }}
-                  connectNulls={true}
                 />
-              </LineChart>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Machine Settings Editor */}
         <div className="p-6 bg-[#0A2E46]">
-          <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+          <h3 className="text-xs font-black uppercase tracking-widest text-[#68717A] mb-4 flex items-center gap-2">
             <Settings className="w-4 h-4" /> Machine Configuration
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             {targetMachine?.settingOptions?.map((opt) => (
               <div key={opt} className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-[#68717A] ml-1">
                   {opt}
                 </label>
                 <Input
                   value={editingSettings.settings[opt] || ""}
                   onChange={(e) =>
-                    setEditingSettings({
-                      ...editingSettings,
-                      settings: {
-                        ...editingSettings.settings,
-                        [opt]: e.target.value,
-                      },
-                    })
-                  }
+                     setEditingSettings({
+                       ...editingSettings,
+                       settings: {
+                         ...editingSettings.settings,
+                         [opt]: e.target.value,
+                       },
+                     })
+                   }
                   placeholder="--"
-                  className="h-12 rounded-xl bg-slate-800 border border-slate-700 focus:border-[#F06C22] focus:ring-[#F06C22] text-lg font-black text-white px-4 tabular-nums transition-all shadow-sm"
+                  className="h-12 rounded-xl bg-slate-800 border border-slate-700 focus:border-[#F06C22] focus:ring-[#F06C22] text-lg font-black text-[#f8fafc] px-4 tabular-nums transition-all shadow-sm"
                 />
               </div>
             ))}

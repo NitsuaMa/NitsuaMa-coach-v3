@@ -289,9 +289,9 @@ export function PreSessionOverview({
                       onDragStart={(e) => onDragStart(e, idx)}
                       onDragOver={onDragOver}
                       onDrop={(e) => onDrop(e, idx)}
-                      className="bg-slate-800 border border-slate-700 rounded-xl p-3 flex items-center justify-between group hover:border-slate-500 transition-colors cursor-move"
+                      className="bg-slate-800 border border-slate-700 rounded-xl p-3 flex items-center justify-between group hover:border-slate-500 transition-colors cursor-move select-none"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 pointer-events-none">
                         <GripVertical className="w-5 h-5 text-slate-500" />
                         <div className="flex flex-col">
                           <h4 className="text-sm font-black uppercase text-white truncate max-w-[200px] sm:max-w-xs">{machine?.name || mId}</h4>

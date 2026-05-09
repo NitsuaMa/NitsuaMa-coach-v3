@@ -366,7 +366,7 @@ export function WorkoutChartGrid({
                                <span className="text-[8px] font-black pointer-events-none text-slate-500 tracking-tighter">[SKIPPED]</span>
                              </div>
                            ) : (
-                           <div className="flex flex-col items-center justify-center">
+                             <div className="flex flex-col items-center justify-center">
                               <div className="flex items-baseline gap-0.5">
                                  <span className="text-[14px] font-black tracking-tighter text-white tabular-nums leading-none">
                                    {log.weight}
@@ -382,13 +382,18 @@ export function WorkoutChartGrid({
                                    {log.repsLeft !== undefined && log.repsRight !== undefined ? (
                                       `${log.repsLeft}L|${log.repsRight}R`
                                     ) : (
-                                      log.isStaticHold ? (log.seconds || '--') : (log.reps || '--')
+                                      log.isStaticHold || log.isTSC || (log.seconds && (!log.reps || parseInt(log.reps) === 0)) ? (log.seconds || '--') : (log.reps || '--')
                                     )}
                                  </span>
                                  <span className="text-[7px] font-black uppercase text-slate-400 tabular-nums">
-                                    {log.repsLeft !== undefined && log.repsRight !== undefined ? '' : (log.isStaticHold ? 's' : 'r')}
+                                    {log.repsLeft !== undefined && log.repsRight !== undefined ? '' : (log.isStaticHold || log.isTSC || (log.seconds && (!log.reps || parseInt(log.reps) === 0)) ? 's' : 'r')}
                                  </span>
                               </div>
+                              {log.totalTimeUnderLoad !== undefined && (
+                                <div className="text-[7px] font-bold text-[#F06C22] uppercase tracking-tighter mt-0.5 leading-none">
+                                  {log.totalTimeUnderLoad}s {log.averageTimePerRep !== undefined && `(${log.averageTimePerRep}s avg)`}
+                                </div>
+                              )}
                            </div>
                            )
                          ) : (
