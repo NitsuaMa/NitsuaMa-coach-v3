@@ -80,9 +80,11 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
   const [isScanning, setIsScanning] = useState(false);
   const [isScanningSettings, setIsScanningSettings] = useState(false);
   const [scanProgress, setScanProgress] = useState('');
+  const [scanPercentage, setScanPercentage] = useState(0);
   const [validationSessions, setValidationSessions] = useState<ValidationSession[]>([]);
   const [extractedSettings, setExtractedSettings] = useState<OCRMachineSetting[]>([]);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [finalizeProgress, setFinalizeProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement> | { target: { files: FileList | null } }) => {
@@ -117,13 +119,29 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
     if (!selectedClientId || files.length === 0 || !expectedSessions) return;
 
     setIsScanning(true);
+    setScanPercentage(0);
     setScanProgress('Waking Vision Engine...');
     setValidationSessions([]);
+
+    // Simulated progress increment while AI is working
+    const progressInterval = setInterval(() => {
+      setScanPercentage(prev => {
+        if (prev < 30) return prev + 2;
+        if (prev < 60) return prev + 1;
+        if (prev < 90) return prev + 0.5;
+        if (prev < 98) return prev + 0.1;
+        return prev;
+      });
+    }, 500);
 
     try {
       const imageFiles = files.map(f => ({ base64: f.base64, mimeType: f.mimeType }));
       setScanProgress(`Analyzing ${files.length} images simultaneously...`);
       const ocrResult = await processLegacyChart(imageFiles, expectedSessions);
+      
+      clearInterval(progressInterval);
+      setScanPercentage(100);
+      setScanProgress('OCR Pipeline Complete');
 
       // Reconstructed Merge Logic
       const sessionsMap: Record<number, ValidationSession> = {};
@@ -228,6 +246,7 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
       setValidationSessions(mappedSessions);
       setScanProgress('OCR Pipeline Complete');
     } catch (err) {
+      clearInterval(progressInterval);
       console.error(err);
       setScanProgress('Engine Failure: Check Logs');
     } finally {
@@ -290,15 +309,38 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
   const finalizeImport = async () => {
     if (!selectedClientId || isFinalizing) return;
     setIsFinalizing(true);
+    setFinalizeProgress(0);
 
     try {
-      const batch = writeBatch(db);
+      // Calculate total operations to track progress
+      // 1 for each session, 1 for each log, 1 for client update, potentially many for settings
+      const totalSessions = validationSessions.length;
+      const totalLogs = validationSessions.reduce((acc, s) => acc + s.machines.filter(m => m.machineId).length, 0);
+      const totalSettings = extractedSettings.length;
+      const totalOps = totalSessions + totalLogs + 1 + (totalSettings > 0 ? totalSettings : 0);
+      
+      let completedOps = 0;
+      const updateProgress = () => {
+        completedOps++;
+        setFinalizeProgress(Math.min(Math.round((completedOps / totalOps) * 100), 99));
+      };
+
+      const MAX_BATCH_SIZE = 450; // Safety margin below 500
+      let currentBatch = writeBatch(db);
+      let opCount = 0;
+
+      const commitBatchIfNeeded = async (force = false) => {
+        if (opCount >= MAX_BATCH_SIZE || (force && opCount > 0)) {
+          await currentBatch.commit();
+          currentBatch = writeBatch(db);
+          opCount = 0;
+        }
+      };
       
       // 1. Process Sessions & Logs
       for (const vSess of validationSessions) {
         const sessionRef = doc(collection(db, 'sessions'));
         
-        // Standardize Date (MM/DD/YYYY required globally for consistency)
         let formattedDate = vSess.date;
         if (vSess.date) {
           const timestamp = parseSessionDate(vSess.date);
@@ -327,7 +369,11 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
           createdAt: serverTimestamp(),
           endTime: serverTimestamp()
         };
-        batch.set(sessionRef, sessionData);
+        
+        currentBatch.set(sessionRef, sessionData);
+        opCount++;
+        updateProgress();
+        await commitBatchIfNeeded();
 
         for (const vLog of vSess.machines) {
           if (!vLog.machineId) continue;
@@ -342,11 +388,14 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
             isTSC: vLog.isStaticHold,
             isStaticHold: vLog.isStaticHold,
             machineSettings: vLog.settings ? { "Seat": vLog.settings } : {},
-            repQuality: 2, // Standardized: 2 = Yellow/Completed for legacy imports
+            repQuality: 2,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
           };
-          batch.set(logRef, logData);
+          currentBatch.set(logRef, logData);
+          opCount++;
+          updateProgress();
+          await commitBatchIfNeeded();
         }
       }
 
@@ -356,17 +405,17 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
         : 0;
       
       const clientRef = doc(db, 'clients', selectedClientId);
-      batch.update(clientRef, {
+      currentBatch.update(clientRef, {
         completedSessions: increment(validationSessions.length),
-        sessionCount: maxSessionNum, // Set to highest imported session number
+        sessionCount: maxSessionNum,
         updatedAt: serverTimestamp()
       });
+      opCount++;
+      updateProgress();
+      await commitBatchIfNeeded();
 
-        await batch.commit();
-
-      // 3. Save Global Machine Settings if extracted
+      // 3. Save Global Machine Settings
       if (extractedSettings.length > 0) {
-        const settingsBatch = writeBatch(db);
         const trainer = trainers.find(t => t.id === 'legacy-trainer') || trainers[0];
         
         for (const setting of extractedSettings) {
@@ -380,7 +429,7 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
           if (setting.handles) finalSettings['Handles'] = setting.handles;
           if (setting.armPad) finalSettings['Arm Pad'] = setting.armPad;
 
-          settingsBatch.set(settingRef, {
+          currentBatch.set(settingRef, {
             clientId: selectedClientId,
             machineId: setting.machineId,
             settings: finalSettings,
@@ -388,9 +437,16 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
             updatedAt: serverTimestamp(),
             notes: 'Extracted from legacy chart'
           }, { merge: true });
+          
+          opCount++;
+          updateProgress();
+          await commitBatchIfNeeded();
         }
-        await settingsBatch.commit();
       }
+
+      // Final commit for any leftover operations
+      await commitBatchIfNeeded(true);
+      setFinalizeProgress(100);
 
       if (onComplete) onComplete();
     } catch (err) {
@@ -606,6 +662,13 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
                         </div>
                         <div className="space-y-2">
                           <h3 className="text-lg font-black text-white uppercase tracking-widest animate-pulse">Analyzing Grid Intersections</h3>
+                          <div className="w-64 h-2 bg-white/5 border border-white/5 rounded-full overflow-hidden mx-auto mt-4 mb-2">
+                            <motion.div 
+                              initial={{ width: 0 }}
+                              animate={{ width: `${scanPercentage}%` }}
+                              className="h-full bg-gradient-to-r from-[#F06C22] to-[#FF8C42] shadow-[0_0_15px_rgba(240,108,34,0.3)]"
+                            />
+                          </div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest max-w-xs mx-auto">
                             Performing row-by-row clinical extraction. This may take 30-60 seconds depending on data density.
                           </p>
@@ -828,10 +891,23 @@ export function LegacyChartImporter({ clients, machines, trainers, initialClient
                           className="w-full flex items-center justify-center gap-3 bg-[#F06C22] hover:bg-[#D95B16] text-white font-black text-lg h-20 tracking-widest uppercase transition-all shadow-[0_10px_40px_rgba(240,108,34,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isFinalizing ? (
-                            <>
-                              <div className="w-6 h-6 rounded-full border-4 border-white/20 border-t-white animate-spin"></div>
-                              Committing Data...
-                            </>
+                            <div className="flex flex-col items-center gap-3 w-full max-w-md px-6">
+                              <div className="flex justify-between w-full mb-1">
+                                <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">Database Sync Integrity</span>
+                                <span className="text-[10px] font-black text-white uppercase">{finalizeProgress}%</span>
+                              </div>
+                              <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden border border-white/5">
+                                <motion.div 
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${finalizeProgress}%` }}
+                                  className="h-full bg-gradient-to-r from-[#F06C22] to-[#FF8C42] shadow-[0_0_10px_rgba(240,108,34,0.5)]"
+                                />
+                              </div>
+                              <div className="flex items-center gap-2 mt-2">
+                                <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin"></div>
+                                <p className="text-[11px] font-bold text-white uppercase tracking-tighter">Committing Clinical Records...</p>
+                              </div>
+                            </div>
                           ) : (
                             <>
                               <ArrowRight className="w-8 h-8" />

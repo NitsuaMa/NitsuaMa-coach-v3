@@ -17,6 +17,22 @@ import { ExerciseLog, WorkoutSession } from '../types';
 export async function calculateHighlightedMovements(clientId: string, machineIds: string[]) {
   const highlightedMovements = [];
 
+  // Fetch sessions once to mapping sessionId to sessionNumber/date
+  const sessionsSnap = await getDocs(query(
+    collection(db, 'sessions'),
+    where('clientId', '==', clientId),
+    orderBy('sessionNumber', 'asc')
+  ));
+  
+  const sessionsMap = new Map();
+  sessionsSnap.docs.forEach(d => {
+    const data = d.data();
+    sessionsMap.set(d.id, {
+      sessionNumber: data.sessionNumber || 0,
+      date: data.date || ''
+    });
+  });
+
   for (const machineId of machineIds) {
     // Get Machine Info
     const machineSnapshot = await getDocs(query(collection(db, 'machines'), where('__name__', '==', machineId)));
@@ -30,11 +46,31 @@ export async function calculateHighlightedMovements(clientId: string, machineIds
       where('machineId', '==', machineId)
     );
     const logsSnap = await getDocs(logsQuery);
-    const allWeights = logsSnap.docs
-      .map(d => parseFloat(d.data().weight || '0'))
+    const logs = logsSnap.docs
+      .map(d => ({ id: d.id, ...d.data() } as ExerciseLog))
+      .sort((a, b) => {
+        const sessA = sessionsMap.get(a.sessionId);
+        const sessB = sessionsMap.get(b.sessionId);
+        
+        if (sessA && sessB) {
+          if (sessA.sessionNumber !== sessB.sessionNumber) {
+            return sessA.sessionNumber - sessB.sessionNumber;
+          }
+          if (sessA.date !== sessB.date) {
+            return sessA.date.localeCompare(sessB.date);
+          }
+        }
+        
+        const timeA = a.createdAt?.toMillis?.() || 0;
+        const timeB = b.createdAt?.toMillis?.() || 0;
+        return timeA - timeB;
+      });
+
+    const weights = logs
+      .map(d => parseFloat(d.weight || '0'))
       .filter(w => !isNaN(w) && w > 0);
 
-    if (allWeights.length === 0) {
+    if (weights.length === 0) {
       highlightedMovements.push({
         machineId,
         machineName,
@@ -49,8 +85,8 @@ export async function calculateHighlightedMovements(clientId: string, machineIds
       continue;
     }
 
-    const firstWeight = Math.min(...allWeights);
-    const currentWeight = Math.max(...allWeights);
+    const firstWeight = weights[0];
+    const currentWeight = weights[weights.length - 1];
     
     // For reps/quality, we still might want the most recent log
     const recentLogQuery = query(
@@ -236,10 +272,31 @@ export async function calculateDynamicHighlightMetrics(clientId: string, machine
   );
   
   const logsSnap = await getDocs(logsQuery);
+  
+  const sessionInfoMap = new Map();
+  userSessions.forEach(s => {
+    sessionInfoMap.set(s.id, {
+      sessionNumber: s.sessionNumber || 0,
+      date: s.date || ''
+    });
+  });
+
   const validLogs = logsSnap.docs
     .map(d => ({ id: d.id, createdAt: d.data().createdAt, ...d.data() } as ExerciseLog))
     .filter(l => sessionIds.has(l.sessionId))
     .sort((a, b) => {
+      const sessA = sessionInfoMap.get(a.sessionId);
+      const sessB = sessionInfoMap.get(b.sessionId);
+      
+      if (sessA && sessB) {
+        if (sessA.sessionNumber !== sessB.sessionNumber) {
+          return sessA.sessionNumber - sessB.sessionNumber;
+        }
+        if (sessA.date !== sessB.date) {
+          return sessA.date.localeCompare(sessB.date);
+        }
+      }
+
       const timeA = a.createdAt?.toMillis?.() || 0;
       const timeB = b.createdAt?.toMillis?.() || 0;
       return timeA - timeB; // ascending
@@ -250,8 +307,8 @@ export async function calculateDynamicHighlightMetrics(clientId: string, machine
   const weights = validLogs.map(l => parseFloat(l.weight || '0') || 0).filter(w => w > 0);
   if (weights.length === 0) return null;
 
-  const startW = Math.min(...weights);
-  const currentW = Math.max(...weights);
+  const startW = weights[0];
+  const currentW = weights[weights.length - 1];
 
   let percentageIncrease = 0;
   if (startW > 0) {

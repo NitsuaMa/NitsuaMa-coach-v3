@@ -44,6 +44,7 @@ export function PreSessionOverview({
   const [adjustedMachineIds, setAdjustedMachineIds] = useState<string[]>([]);
   const [adjustmentNote, setAdjustmentNote] = useState('');
   const [isAdjusting, setIsAdjusting] = useState(false);
+  const [showAddMachine, setShowAddMachine] = useState(false);
   
   const [newNoteContent, setNewNoteContent] = useState('');
   const [newNotePriority, setNewNotePriority] = useState<'High' | 'Medium' | 'Low'>('High');
@@ -279,6 +280,7 @@ export function PreSessionOverview({
                 selectedRoutineIds.map((mId, idx) => {
                   const machine = machines.find(m => m.id === mId);
                   const avgQ = getAverageQuality(mId);
+                  const lastLog = historicalLifts[mId]?.last || logs.filter(l => l.machineId === mId).sort((a,b) => (b.createdAt as any)?.toMillis?.() - (a.createdAt as any)?.toMillis?.())[0];
                   
                   return (
                     <div 
@@ -293,11 +295,20 @@ export function PreSessionOverview({
                         <GripVertical className="w-5 h-5 text-slate-500" />
                         <div className="flex flex-col">
                           <h4 className="text-sm font-black uppercase text-white truncate max-w-[200px] sm:max-w-xs">{machine?.name || mId}</h4>
-                          {avgQ ? (
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Avg: {avgQ.grade}</span>
-                          ) : (
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">No Data</span>
-                          )}
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {lastLog ? (
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-[#38BDF8]">
+                                Last: {lastLog.weight || 0} lbs × {lastLog.isStaticHold || lastLog.isTSC ? `${lastLog.seconds || 0}s` : `${lastLog.reps || 0}`}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">No Previous Record</span>
+                            )}
+                            {avgQ && (
+                              <span className={`text-[10px] font-bold uppercase tracking-widest ${avgQ.color.split(' ')[0]}`}>
+                                • {avgQ.grade}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                       
@@ -314,18 +325,31 @@ export function PreSessionOverview({
             </div>
 
             {/* Quick-Add Bar */}
-            <div className="mt-6 pt-4 border-t border-slate-800 overflow-x-auto pb-2 custom-scrollbar">
-              <div className="flex gap-2">
-                {machines.filter(m => !selectedRoutineIds.includes(m.id!)).map(m => (
-                  <button
-                    key={m.id}
-                    onClick={() => addMachine(m.id!)}
-                    className="px-3 py-1.5 rounded-full border border-slate-700 text-slate-400 hover:border-[#F06C22] hover:text-[#F06C22] text-[10px] font-bold uppercase whitespace-nowrap transition-colors"
-                  >
-                    + {m.name}
-                  </button>
-                ))}
-              </div>
+            <div className="mt-6 pt-4 border-t border-slate-800">
+              <button
+                onClick={() => setShowAddMachine(!showAddMachine)}
+                className="w-full py-3 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white font-black uppercase text-[11px] tracking-widest transition-all"
+              >
+                {showAddMachine ? 'Close Machine List' : '+ Add Machine'}
+              </button>
+              
+              {showAddMachine && (
+                <div className="flex flex-wrap gap-2 mt-3 p-3 bg-slate-900/50 rounded-xl border border-slate-700/50 max-h-[200px] overflow-y-auto custom-scrollbar">
+                  {machines.filter(m => !selectedRoutineIds.includes(m.id!)).length === 0 ? (
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">All machines added</span>
+                  ) : (
+                    machines.filter(m => !selectedRoutineIds.includes(m.id!)).map(m => (
+                      <button
+                        key={m.id}
+                        onClick={() => addMachine(m.id!)}
+                        className="px-3 py-1.5 rounded-full border border-slate-700 text-slate-400 hover:border-[#F06C22] hover:text-[#F06C22] text-[10px] font-bold uppercase whitespace-nowrap transition-colors"
+                      >
+                        + {m.name}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
 
             {/* 4. Routine Action Controls (Bottom of List) */}

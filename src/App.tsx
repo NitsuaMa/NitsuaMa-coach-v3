@@ -5341,16 +5341,11 @@ function WorkoutTrackerView({
         return timeB - timeA;
       });
       
-      const machineLastWeights: Record<string, string> = {};
-      const machineLastQualities: Record<string, number> = {};
+      const machineLastLogs: Record<string, ExerciseLog> = {};
       allLogs.forEach(data => {
         const key = data.side ? `${data.machineId}_${data.side}` : data.machineId;
-        const validWeight = data.weight;
-        if (!machineLastWeights[key] && validWeight) {
-          machineLastWeights[key] = validWeight;
-          if (data.repQuality) {
-            machineLastQualities[key] = data.repQuality;
-          }
+        if (!machineLastLogs[key] && (data.weight || data.reps || data.seconds)) {
+          machineLastLogs[key] = data;
         }
       });
 
@@ -5363,52 +5358,47 @@ function WorkoutTrackerView({
 
       if (activeMachineIds && activeMachineIds.length > 0) {
         const currentSettings = clientMachineSettings;
+        
+        const createLogPayload = (prevLog: ExerciseLog | undefined, mId: string, side?: 'Left' | 'Right') => {
+          const payload: any = {
+            sessionId: docRef.id,
+            clientId,
+            machineId: mId,
+            machineSettings: currentSettings[mId]?.settings || prevLog?.machineSettings || {},
+            createdAt: serverTimestamp()
+          };
+          if (side) payload.side = side;
+          if (prevLog) {
+            if (prevLog.weight) payload.weight = prevLog.weight;
+            if (prevLog.reps) payload.reps = prevLog.reps;
+            if (prevLog.seconds) payload.seconds = prevLog.seconds;
+            if (prevLog.isStaticHold !== undefined) payload.isStaticHold = prevLog.isStaticHold;
+            if (prevLog.isTSC !== undefined) payload.isTSC = prevLog.isTSC;
+            if (prevLog.repQuality) payload.repQuality = prevLog.repQuality;
+          }
+          return payload;
+        };
+
         for (const mId of activeMachineIds) {
           const mac = machines.find(m => m.id === mId);
           const isTorsoMac = mac?.name.toLowerCase().includes('torso rotation');
           
           if (isTorsoMac) {
-            const prefilledLeft = machineLastWeights[`${mId}_Left`] || machineLastWeights[mId];
-            const prefilledRight = machineLastWeights[`${mId}_Right`] || machineLastWeights[mId];
+            const prefilledLeft = machineLastLogs[`${mId}_Left`] || machineLastLogs[mId];
+            const prefilledRight = machineLastLogs[`${mId}_Right`] || machineLastLogs[mId];
             
             // Create Left set if there is history
             if (prefilledLeft) {
-              await addDoc(collection(db, 'exerciseLogs'), {
-                sessionId: docRef.id,
-                clientId,
-                machineId: mId,
-                side: 'Left',
-                weight: prefilledLeft,
-                repQuality: machineLastQualities[`${mId}_Left`] || machineLastQualities[mId] || null,
-                machineSettings: currentSettings[mId]?.settings || {},
-                createdAt: serverTimestamp()
-              });
+              await addDoc(collection(db, 'exerciseLogs'), createLogPayload(prefilledLeft, mId, 'Left'));
             }
             // Create Right set if there is history
             if (prefilledRight) {
-              await addDoc(collection(db, 'exerciseLogs'), {
-                sessionId: docRef.id,
-                clientId,
-                machineId: mId,
-                side: 'Right',
-                weight: prefilledRight,
-                repQuality: machineLastQualities[`${mId}_Right`] || machineLastQualities[mId] || null,
-                machineSettings: currentSettings[mId]?.settings || {},
-                createdAt: serverTimestamp()
-              });
+              await addDoc(collection(db, 'exerciseLogs'), createLogPayload(prefilledRight, mId, 'Right'));
             }
           } else {
-            const prefilledWeight = machineLastWeights[mId];
-            if (prefilledWeight) {
-              await addDoc(collection(db, 'exerciseLogs'), {
-                sessionId: docRef.id,
-                clientId,
-                machineId: mId,
-                weight: prefilledWeight,
-                repQuality: machineLastQualities[mId] || null,
-                machineSettings: currentSettings[mId]?.settings || {},
-                createdAt: serverTimestamp()
-              });
+            const prefilledLog = machineLastLogs[mId];
+            if (prefilledLog) {
+              await addDoc(collection(db, 'exerciseLogs'), createLogPayload(prefilledLog, mId));
             }
           }
         }

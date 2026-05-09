@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { parseSessionDate } from "../lib/utils";
 
 export interface ValidationLog {
@@ -126,33 +126,33 @@ STRICT RULES:
 3. OUTPUT FORMAT: You must output ONLY a valid JSON object matching the exact schema requested. Do not include markdown code blocks (\`\`\`json) or conversational text outside the JSON.`;
 
 export const AI_SCHEMA = {
-  type: "object",
+  type: Type.OBJECT,
   properties: {
     targetMuscles: {
-      type: "array",
-      items: { type: "string" },
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
       description: "List of primary muscles targeted.",
     },
     initialAdjustments: {
-      type: "array",
-      items: { type: "string" },
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
       description:
         "Steps to take BEFORE the client enters (e.g., clear weight stack, set standard gap).",
     },
     entryAndSafety: {
-      type: "array",
-      items: { type: "string" },
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
       description:
         "Step-by-step instructions for safely loading the client into the machine.",
     },
     alignmentAndPosture: {
-      type: "array",
-      items: { type: "string" },
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
       description:
         "Instructions for seat height, joint stacking, and posture (e.g., 'chest up').",
     },
     clientModifications: {
-      type: "string",
+      type: Type.STRING,
       description:
         "Specific adjustments made based on the provided Client Details. If none, output 'Standard MSF setup applies.'",
     },
@@ -182,23 +182,23 @@ STRICT RULES:
 3. OUTPUT FORMAT: You must output ONLY a valid JSON object matching the requested schema. Do not include markdown formatting like \`\`\`json or any conversational text.`;
 
 export const AI_EXECUTION_SCHEMA = {
-  type: "object",
+  type: Type.OBJECT,
   properties: {
     gradualLoadUp: {
-      type: "string",
+      type: Type.STRING,
       description:
         "Instructions for how the client should initiate the first rep (e.g., 'apply 101 lbs of pressure to a 100 lb stack').",
     },
     turnaroundRules: {
-      type: "object",
+      type: Type.OBJECT,
       properties: {
         lowerTurn: {
-          type: "string",
+          type: Type.STRING,
           description:
             "Specific rules for the lower turnaround (e.g., 'touch and go smoothly', 'no pausing').",
         },
         upperTurn: {
-          type: "string",
+          type: Type.STRING,
           description:
             "Specific rules for the upper turnaround (e.g., 'pause for 1-2 seconds', 'squeeze for 2-3 seconds').",
         },
@@ -206,13 +206,13 @@ export const AI_EXECUTION_SCHEMA = {
       required: ["lowerTurn", "upperTurn"],
     },
     activeSetCues: {
-      type: "array",
-      items: { type: "string" },
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
       description:
         "A list of 3 to 5 specific vocal cues or instructions the trainer should say during the set, extracted directly from the text.",
     },
     failureAndExit: {
-      type: "string",
+      type: Type.STRING,
       description:
         "Instructions on how to handle the end of the set, achieving failure, and safely unloading the client.",
     },
@@ -238,25 +238,25 @@ STRICT RULES:
 3. OUTPUT FORMAT: You must output ONLY a valid JSON object matching the requested schema. Do not include markdown formatting like \`\`\`json or any conversational text.`;
 
 export const AI_CLINICAL_SCHEMA = {
-  type: "object",
+  type: Type.OBJECT,
   properties: {
     contraindications: {
-      type: "array",
-      items: { type: "string" },
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
       description:
         "Specific conditions or injuries where this exercise should be avoided or severely limited (e.g., 'Osteoporosis on Torso Rotation').",
     },
     dynamicModifications: {
-      type: "string",
+      type: Type.STRING,
       description:
         "Adjustments to the standard dynamic movement for specific limitations (e.g., 'Shorten ROM by pinning the weight stack', 'Use Torso Arm setup instead of Pulldown').",
     },
     staticAlternativeProtocol: {
-      type: "object",
+      type: Type.OBJECT,
       properties: {
-        isRecommended: { type: "boolean" },
+        isRecommended: { type: Type.BOOLEAN },
         setupAndExecution: {
-          type: "string",
+          type: Type.STRING,
           description:
             "Step-by-step on how to set up the TSC or Static Hold (SH), including pin placement and time/effort protocol (e.g., 30/30/30 sec).",
         },
@@ -264,13 +264,13 @@ export const AI_CLINICAL_SCHEMA = {
       required: ["isRecommended", "setupAndExecution"],
     },
     approvedSubstitutions: {
-      type: "array",
-      items: { type: "string" },
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
       description:
         "Alternative exercises to perform if this machine cannot be used, based strictly on the reference text.",
     },
     progressionAdvice: {
-      type: "string",
+      type: Type.STRING,
       description:
         "Specific rules for progressing this client on this machine (e.g., 'Do not progress load until 6-sec/6-sec cadence is mastered').",
     },
@@ -324,7 +324,7 @@ TASK:
 Analyze the MSF Reference Text. Generate a step-by-step setup guide for the trainer to get the client safely into the ${machineName}. Ensure any specific limitations mentioned in the Client Details and Clinical Profile are addressed using rules found in the Reference Text. Specifically check against the Machine Known Contraindications. Return ONLY the requested JSON object.`;
 
   const response = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
+    model: "gemini-3-flash-preview",
     contents: prompt,
     config: {
       systemInstruction: AI_SETUP_PROMPT,
@@ -371,7 +371,7 @@ TASK:
 Analyze the provided MSF Reference Text for the ${machineName}. Generate a structured coaching guide that a trainer can read while the client is actively performing the exercise. Focus strictly on the execution of the movement, the pacing, turnaround rules, and specific verbal cues. Return ONLY the requested JSON object.`;
 
   const response = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
+    model: "gemini-3-flash-preview",
     contents: prompt,
     config: {
       systemInstruction: AI_EXECUTION_PROMPT,
@@ -425,7 +425,7 @@ TASK:
 Analyze the MSF Reference Text, the specific Client Details, and explicitly cross-reference the Client Clinical Profile against the Machine Known Contraindications. Generate a clinical strategy and progression guide for the trainer. If the client's condition requires a Static Hold (SH) or Timed Static Contraction (TSC), detail the exact setup. If the exercise is completely contraindicated, provide the approved substitutions. Return ONLY the requested JSON object.`;
 
   const response = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
+    model: "gemini-3-flash-preview",
     contents: prompt,
     config: {
       systemInstruction: AI_CLINICAL_PROMPT,
@@ -476,23 +476,23 @@ export interface OCRResult {
 }
 
 export const MACHINE_SETTINGS_OCR_SCHEMA = {
-  type: "object" as const,
+  type: Type.OBJECT,
   properties: {
     settings: {
-      type: "array" as const,
+      type: Type.ARRAY,
       items: {
-        type: "object" as const,
+        type: Type.OBJECT,
         properties: {
           machineId: {
-            type: "string" as const,
+            type: Type.STRING,
             description:
               "The official machine ID from the provided dictionary.",
           },
-          seat: { type: "string" as const },
-          gap: { type: "string" as const },
-          backPad: { type: "string" as const },
-          handles: { type: "string" as const },
-          armPad: { type: "string" as const },
+          seat: { type: Type.STRING },
+          gap: { type: Type.STRING },
+          backPad: { type: Type.STRING },
+          handles: { type: Type.STRING },
+          armPad: { type: Type.STRING },
         },
         required: ["machineId"],
       },
@@ -502,31 +502,31 @@ export const MACHINE_SETTINGS_OCR_SCHEMA = {
 };
 
 export const CHART_OCR_SCHEMA = {
-  type: "object" as const,
+  type: Type.OBJECT,
   properties: {
     sessionHeaders: {
-      type: "array" as const,
+      type: Type.ARRAY,
       items: {
-        type: "object" as const,
+        type: Type.OBJECT,
         properties: {
-          sessionNumber: { type: "number" as const },
-          date: { type: "string" as const },
-          trainer: { type: "string" as const },
+          sessionNumber: { type: Type.NUMBER },
+          date: { type: Type.STRING },
+          trainer: { type: Type.STRING },
         },
         required: ["sessionNumber", "date", "trainer"],
       },
     },
     performances: {
-      type: "array" as const,
+      type: Type.ARRAY,
       items: {
-        type: "object" as const,
+        type: Type.OBJECT,
         properties: {
-          sessionNumber: { type: "number" as const },
-          machineName: { type: "string" as const },
-          settings: { type: "string" as const },
-          weight: { type: "number" as const },
-          reps: { type: "string" as const },
-          isStaticHold: { type: "boolean" as const },
+          sessionNumber: { type: Type.NUMBER },
+          machineName: { type: Type.STRING },
+          settings: { type: Type.STRING },
+          weight: { type: Type.NUMBER },
+          reps: { type: Type.STRING },
+          isStaticHold: { type: Type.BOOLEAN },
         },
         required: [
           "sessionNumber",
