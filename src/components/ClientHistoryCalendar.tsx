@@ -88,20 +88,7 @@ export function ClientHistoryCalendar({
     return () => unsubscribe();
   }, [clientId, user]);
 
-  // Fetch ALL logs for the client to support accurate list view summaries
-  useEffect(() => {
-    if (!clientId || !user) return;
-    const q = query(
-      collection(db, 'exerciseLogs'),
-      where('clientId', '==', clientId)
-    );
-    const unsubscribe = onSnapshot(q, (snap) => {
-      setLocalAllLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExerciseLog)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'exerciseLogs');
-    });
-    return () => unsubscribe();
-  }, [clientId, user]);
+  // No longer fetching ALL logs here, using allLogs prop or specific session fetches
 
   // Fetch logs for selected session
   useEffect(() => {
@@ -450,9 +437,9 @@ export function ClientHistoryCalendar({
                  }
                }
                
-               const isLegacy = session.trainerId === 'legacy-trainer' || session.trainerInitials === 'Legacy' || session.trainerInitials === 'Chart';
+               const isLegacy = session.legacy_filemaker_id || session.trainerId === 'legacy-trainer' || session.trainerInitials === 'Legacy' || session.trainerInitials === 'Chart';
 
-               const sessionLogs = localAllLogs.filter(l => l.sessionId === session.id);
+               const sessionLogs = (allLogs || localAllLogs).filter(l => l.sessionId === session.id);
                const totalVolume = Math.round(sessionLogs.reduce((acc, log) => acc + calculateExerciseVolume(log), 0));
                const machineNames = sessionLogs.map(l => {
                  const m = machines.find(mac => mac.id === l.machineId);
@@ -486,7 +473,7 @@ export function ClientHistoryCalendar({
                    <div className="flex-1 min-w-0 flex flex-col justify-center">
                       <div className="flex items-center gap-3 mb-1 flex-wrap">
                         <span className="text-lg font-black text-white uppercase tracking-tighter shrink-0">
-                          {session.startTime && timestamp > 0 ? new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (sDate ? '12:00 PM' : '--:--')}
+                          {isLegacy ? 'Import Session' : session.startTime && timestamp > 0 ? new Date(session.startTime?.toMillis?.() || session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (sDate ? '12:00 PM' : '--:--')}
                         </span>
                         {daysSincePrev !== null && (
                           <Badge variant="outline" className="text-[9px] font-black text-[#38BDF8] uppercase tracking-widest border-[#38BDF8]/30 bg-[#38BDF8]/10">
@@ -599,7 +586,7 @@ export function ClientHistoryCalendar({
                             : "bg-slate-800 border-slate-700 text-slate-400 hover:text-white"
                         )}
                       >
-                         S{i + 1} - {new Date(sess.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                         S{i + 1} - {sess.legacy_filemaker_id ? 'Imported' : sess.startTime ? new Date(sess.startTime?.toMillis?.() || sess.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'No Time'}
                       </button>
                    ))}
                 </div>

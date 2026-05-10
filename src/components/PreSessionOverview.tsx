@@ -11,12 +11,13 @@ import { CLINICAL_FLAGS_MATRIX } from '../data/clinical-matrix';
 import { Client, Machine, ExerciseLog, Routine, WorkoutSession, TrainerFocus, SessionNote, Trainer, FocusRecord } from '../types';
 import { HistoricalMachinePerformance } from '../lib/historical-utils';
 
+import { calculateStartingWeight } from '../lib/consultation-utils';
+
 interface PreSessionOverviewProps {
   authTrainer: Trainer | null;
   client: Client;
   targetRoutine: Routine | null;
   lastSession: WorkoutSession | null;
-  historicalLifts: Record<string, HistoricalMachinePerformance>;
   onStart: (routineType: 'A' | 'B' | 'Free', customMachines?: string[], note?: string) => void;
   onCancel: () => void;
   routines: Routine[];
@@ -31,7 +32,6 @@ export function PreSessionOverview({
   client, 
   targetRoutine, 
   lastSession, 
-  historicalLifts, 
   onStart,
   onCancel,
   machines,
@@ -84,6 +84,7 @@ export function PreSessionOverview({
   };
 
   const onDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
     const dragIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
     if (dragIndex === dropIndex) return;
 
@@ -281,11 +282,17 @@ export function PreSessionOverview({
                 selectedRoutineIds.map((mId, idx) => {
                   const machine = machines.find(m => m.id === mId);
                   const avgQ = getAverageQuality(mId);
-                  const perfData = historicalLifts[mId];
-                  const lastLog = perfData?.lastLog;
-                  const defaultWeight = perfData?.defaultStartingWeight;
-                  const lastSessionDate = perfData?.lastSessionDate;
-                  const wasPerformedInLastSession = lastSession && perfData?.lastSessionId === lastSession.id;
+                  const metricData = client.currentMachineMetrics?.[mId];
+                  let defaultWeight: number | null = null;
+                  
+                  if (!metricData && machine) {
+                     const gender = client.gender === 'Female' ? 'Female' : 'Male';
+                     const calculatedWeight = calculateStartingWeight(machine.name, gender, client.age || 45, 'Novice');
+                     defaultWeight = calculatedWeight > 0 ? calculatedWeight : null;
+                  }
+
+                  const lastSessionDate = metricData?.lastPerformedDate?.toDate?.() || metricData?.lastPerformedDate ? new Date(metricData.lastPerformedDate) : null;
+                  const wasPerformedInLastSession = lastSession && metricData?.lastSessionId === lastSession.id;
                   
                   return (
                     <div 
@@ -302,9 +309,9 @@ export function PreSessionOverview({
                           <h4 className="text-sm font-black uppercase text-white truncate max-w-[200px] sm:max-w-xs">{machine?.name || mId}</h4>
                           <div className="flex flex-col mt-0.5 space-y-1">
                             <div className="flex items-center gap-2">
-                              {lastLog ? (
+                              {metricData ? (
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-[#38BDF8]">
-                                  Last: {lastLog.weight || 0} lbs × {lastLog.isStaticHold || lastLog.isTSC || (lastLog.seconds && (!lastLog.reps || parseInt(lastLog.reps) === 0)) ? `${lastLog.seconds || 0}s` : `${lastLog.reps || 0}`}
+                                  Last: {metricData.weight || 0} lbs × {metricData.isStaticHold || metricData.isTSC || (metricData.seconds && (!metricData.reps || parseInt(metricData.reps) === 0)) ? `${metricData.seconds || 0}s` : `${metricData.reps || 0}`}
                                 </span>
                               ) : defaultWeight !== null ? (
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-[#F06C22]">
@@ -319,9 +326,9 @@ export function PreSessionOverview({
                                 </span>
                               )}
                             </div>
-                            {lastLog && !wasPerformedInLastSession && lastSessionDate && (
+                            {metricData && !wasPerformedInLastSession && lastSessionDate && (
                               <span className="text-[9px] font-bold uppercase tracking-widest text-[#F06C22]">
-                                Last Performed on {lastSessionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}{perfData?.lastSessionNumber ? ` (Session ${perfData.lastSessionNumber})` : ''}
+                                Last Performed on {lastSessionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}{metricData?.lastPerformedSessionNumber ? ` (Session ${metricData.lastPerformedSessionNumber})` : ''}
                               </span>
                             )}
                           </div>

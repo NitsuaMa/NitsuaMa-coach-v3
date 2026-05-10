@@ -50,6 +50,20 @@ export function PostSessionBriefingView({
     return acc + (isNaN(s) ? 0 : s);
   }, 0);
 
+  let dynamicTimeForTut = 0;
+  let dynamicRepsForTut = 0;
+
+  logs.forEach(log => {
+      const r = parseFloat(log.reps || '0');
+      const s = parseFloat(log.seconds || '0');
+      if (!isNaN(r) && r > 0 && !isNaN(s) && s > 0) {
+        dynamicTimeForTut += s;
+        dynamicRepsForTut += r;
+      }
+  });
+
+  const avgTutPerRep = dynamicRepsForTut > 0 ? (dynamicTimeForTut / dynamicRepsForTut) : 0;
+
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
@@ -116,9 +130,9 @@ export function PostSessionBriefingView({
           </div>
 
           <div className="bg-slate-800 border border-slate-700/50 rounded-2xl p-4 flex flex-col justify-center relative overflow-hidden shadow-lg">
-            <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-400 relative z-10">Time Under Load</span>
-            <span className="text-2xl sm:text-3xl font-black text-[#38BDF8] tracking-tighter mt-1 relative z-10 truncate">
-              {formatTime(totalTimeUnderLoad)}
+            <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-[#38BDF8] relative z-10">Avg TUT / Rep</span>
+            <span className="text-2xl sm:text-3xl font-black text-white tracking-tighter mt-1 relative z-10 truncate">
+              {avgTutPerRep.toFixed(1)}<span className="text-sm text-slate-500 ml-1">s</span>
             </span>
           </div>
 

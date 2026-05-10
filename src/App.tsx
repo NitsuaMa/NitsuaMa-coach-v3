@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { migrateClientMachineMetrics } from './lib/migration-utils';
 import { 
   Users, 
   Plus, 
@@ -188,6 +189,9 @@ const DEFAULT_MACHINES: Machine[] = [
 type RoutineType = 'A' | 'B' | 'Free';
 
 export default function App() {
+  useEffect(() => {
+    (window as any).migrateClientMachineMetrics = migrateClientMachineMetrics;
+  }, []);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -4908,7 +4912,6 @@ function WorkoutTrackerView({
   const [preSessionSelectedRoutine, setPreSessionSelectedRoutine] = useState<RoutineType>('A');
   const [targetRoutine, setTargetRoutine] = useState<Routine | null>(null);
   const [isPaused, setIsPaused] = useState(false);
-  const [historicalLifts, setHistoricalLifts] = useState<Record<string, import('./lib/historical-utils').HistoricalMachinePerformance>>({});
 
   const [machineTimeElapsed, setMachineTimeElapsed] = useState<number>(0);
 
@@ -5215,38 +5218,6 @@ function WorkoutTrackerView({
         }
 
         setTargetRoutine(target);
-
-        if (target) {
-          // Fetch historical lifts for ALL machines for the audit overview
-          setHistoricalLifts({}); // Reset before fetch
-          
-          const fetchAllLifts = async () => {
-            if (!selectedClient) return;
-            try {
-              const historical: Record<string, import('./lib/historical-utils').HistoricalMachinePerformance> = {};
-              const { getLatestMachinePerformance } = await import('./lib/historical-utils');
-              
-              // We fetch historical data in parallel for all machines just in case they select something else
-              const machinePromises = machines.map(async (machine) => {
-                const mId = machine.id;
-                if (!mId) return;
-                historical[mId] = await getLatestMachinePerformance(
-                  clientId,
-                  mId,
-                  selectedClient,
-                  machine.name
-                );
-              });
-
-              await Promise.all(machinePromises);
-              
-              setHistoricalLifts(historical);
-            } catch (err: any) {
-              console.error("Error fetching historical lifts:", err);
-            }
-          };
-          fetchAllLifts();
-        }
       };
       determineAndFetch();
     }
@@ -5371,20 +5342,23 @@ function WorkoutTrackerView({
       }
 
       // 2. Fetch last logs to pre-fill weights
-      // Check historicalLifts state first
-      const machineLastLogs: Record<string, ExerciseLog> = {};
+      const machineLastLogs: Record<string, Partial<ExerciseLog>> = {};
       
-      // Look at all historicalLifts we previously fetched 
-      Object.values(historicalLifts).forEach((perfData: import('./lib/historical-utils').HistoricalMachinePerformance) => {
-        if (perfData.allLogsFromSession && perfData.allLogsFromSession.length > 0) {
-           perfData.allLogsFromSession.forEach(log => {
-             const key = log.side ? `${log.machineId}_${log.side}` : log.machineId;
-             if (!machineLastLogs[key] && (log.weight || log.reps || log.seconds)) {
-               machineLastLogs[key] = log;
-             }
-           });
-        }
-      });
+      if (selectedClient && selectedClient.currentMachineMetrics) {
+        Object.entries(selectedClient.currentMachineMetrics).forEach(([mId, metricVal]) => {
+           const metric = metricVal as import('./types').CurrentMachineMetric;
+           // For simplicity, we just seed it directly mapping back to ExerciseLog properties
+           machineLastLogs[mId] = {
+              weight: metric.weight,
+              reps: metric.reps,
+              seconds: metric.seconds,
+              isStaticHold: metric.isStaticHold,
+              isTSC: metric.isTSC,
+              machineId: mId,
+              repQuality: 2 // default
+           };
+        });
+      }
 
       // 3. Auto-populate logs for routine machines
       let activeMachineIds = customMachines;
@@ -5396,7 +5370,7 @@ function WorkoutTrackerView({
       if (activeMachineIds && activeMachineIds.length > 0) {
         const currentSettings = clientMachineSettings;
         
-        const createLogPayload = (prevLog: ExerciseLog | undefined, mId: string, side?: 'Left' | 'Right', defaultWeight?: number | null) => {
+        const createLogPayload = (prevLog: Partial<ExerciseLog> | undefined, mId: string, side?: 'Left' | 'Right', defaultWeight?: number | null) => {
           const payload: any = {
             sessionId: docRef.id,
             clientId,
@@ -5421,7 +5395,14 @@ function WorkoutTrackerView({
         for (const mId of activeMachineIds) {
           const mac = machines.find(m => m.id === mId);
           const isTorsoMac = mac?.name.toLowerCase().includes('torso rotation');
-          const defaultWeight = historicalLifts[mId]?.defaultStartingWeight;
+          
+          let defaultWeight: number | null = null;
+          if (!machineLastLogs[mId] && selectedClient && mac && mac.name) {
+             const gender = selectedClient.gender === 'Female' ? 'Female' : 'Male';
+             const { calculateStartingWeight } = await import('./lib/consultation-utils');
+             const calculatedWeight = calculateStartingWeight(mac.name, gender, selectedClient.age || 45, 'Novice');
+             defaultWeight = calculatedWeight > 0 ? calculatedWeight : null;
+          }
           
           if (isTorsoMac) {
             const prefilledLeft = machineLastLogs[`${mId}_Left`] || machineLastLogs[mId];
@@ -5615,14 +5596,34 @@ function WorkoutTrackerView({
       }
 
       // 3. Update client if consultation completed or just increment session counters
-      if (selectedClient) {
-        const clientRef = doc(db, 'clients', selectedClient.id!);
+      if (selectedClient && selectedClient.id) {
+        const clientRef = doc(db, 'clients', selectedClient.id);
         const clientUpdates: any = {
           completedSessions: increment(1),
           sessionCount: currentSession.sessionNumber || increment(1),
           updatedAt: serverTimestamp()
         };
         
+        sessionLogs.forEach(logObj => {
+          const log = logObj as any;
+          if (log.weight || log.reps || log.seconds) {
+             const key = `currentMachineMetrics.${log.machineId}`;
+             clientUpdates[key] = {
+                weight: log.weight || '0',
+                reps: log.reps,
+                seconds: log.seconds,
+                isStaticHold: log.isStaticHold,
+                isTSC: log.isTSC,
+                totalTimeUnderLoad: log.totalTimeUnderLoad,
+                averageTimePerRep: log.averageTimePerRep,
+                settings: log.machineSettings || {},
+                lastPerformedDate: serverTimestamp(),
+                lastPerformedSessionNumber: currentSession.sessionNumber,
+                lastSessionId: currentSession.id
+             };
+          }
+        });
+
         if (!selectedClient.consultationCompleted) {
           clientUpdates.consultationCompleted = true;
         }
@@ -5809,7 +5810,6 @@ function WorkoutTrackerView({
         client={selectedClient}
         targetRoutine={targetRoutine}
         lastSession={sessions.filter(s => s.status === 'Completed')[0] || null}
-        historicalLifts={historicalLifts}
         onStart={(routineType, customMachines, note) => startNewSession(routineType, undefined, customMachines, note)}
         onCancel={() => {
           setIsPreSessionMode(false);

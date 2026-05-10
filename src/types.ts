@@ -43,6 +43,20 @@ export interface ClinicalSafetyFlag {
   }[];
 }
 
+export interface CurrentMachineMetric {
+  weight: string;
+  reps?: string;
+  seconds?: string;
+  isStaticHold?: boolean;
+  isTSC?: boolean;
+  totalTimeUnderLoad?: number;
+  averageTimePerRep?: number;
+  settings: Record<string, string>;
+  lastPerformedDate: any;
+  lastPerformedSessionNumber?: number;
+  lastSessionId?: string;
+}
+
 export interface Client {
   id?: string;
   mindbodyId?: string;
@@ -84,6 +98,7 @@ export interface Client {
   consultationCompleted?: boolean;
   requiresConsultation?: boolean;
   discoveryNotes?: string;
+  currentMachineMetrics?: Record<string, CurrentMachineMetric>;
   createdAt?: any;
 }
 

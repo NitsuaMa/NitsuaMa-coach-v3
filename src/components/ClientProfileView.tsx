@@ -454,11 +454,12 @@ export function ClientProfileView({
       return;
     }
 
-    // Full history for everything
+    // Optimized session fetching with limit
     const sessionsQuery = query(
       collection(db, "sessions"),
       where("clientId", "==", clientId),
-      orderBy("date", "desc")
+      orderBy("date", "desc"),
+      limit(sessionLimit)
     );
 
     const unsubSessions = onSnapshot(sessionsQuery, async (sessionSnap) => {
@@ -471,10 +472,13 @@ export function ClientProfileView({
       setSessions(sessionsData);
 
       if (sessionsData.length > 0) {
+        // Fetch logs only for the retrieved sessions
         const sessionIds = sessionsData.map((s) => s.id!).filter(Boolean);
+        
+        // Use chunks of 30 for 'in' query limit optimization
         const chunks = [];
-        for (let i = 0; i < sessionIds.length; i += 10) {
-          chunks.push(sessionIds.slice(i, i + 10));
+        for (let i = 0; i < sessionIds.length; i += 30) {
+          chunks.push(sessionIds.slice(i, i + 30));
         }
 
         let allFetchedLogs: ExerciseLog[] = [];
@@ -495,7 +499,9 @@ export function ClientProfileView({
       } else {
         setAllLogs([]);
       }
-    }, (error) => handleFirestoreError(error, OperationType.GET, "sessions"));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, "sessions");
+    });
 
     return () => unsubSessions();
   }, [clientId, sessionLimit, activeTab, hasQuotaError]);
@@ -1121,6 +1127,9 @@ export function ClientProfileView({
                                 day: "2-digit",
                               }) : "--"}
                             </span>
+                            <span className="text-[6px] text-[#38BDF8] font-bold uppercase tracking-tighter">
+                              {(s.legacy_filemaker_id || s.trainerId === 'legacy-trainer' || s.trainerInitials === 'Legacy' || s.trainerInitials === 'Chart') ? 'Imported' : s.startTime ? new Date(s.startTime?.toMillis?.() || s.startTime).toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </span>
                           </div>
                         </th>
                       );
@@ -1485,13 +1494,25 @@ export function ClientProfileView({
         <TabsContent value="history" className="h-[750px] relative pb-20 overflow-y-auto custom-scrollbar">
           <div className="space-y-6">
             {clientId && (
-              <ClientHistoryCalendar
-                clientId={clientId}
-                machines={machines}
-                trainers={trainers}
-                user={user}
-                allLogs={allLogs}
-              />
+              <div className="flex flex-col gap-4">
+                <ClientHistoryCalendar
+                  clientId={clientId}
+                  machines={machines}
+                  trainers={trainers}
+                  user={user}
+                  allLogs={allLogs}
+                />
+                
+                <div className="flex justify-center pb-8">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setSessionLimit(prev => prev + 30)}
+                    className="border-[#38BDF8]/50 text-[#38BDF8] hover:bg-[#38BDF8]/10 font-black tracking-widest uppercase text-[10px] h-12 rounded-2xl px-6"
+                  >
+                    Load More Sessions
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
         </TabsContent>
@@ -1786,9 +1807,10 @@ export function ClientProfileView({
                       className={`w-full p-4 text-left hover:bg-white transition-all group ${selectedTimingSessionId === s.id ? "bg-white shadow-sm ring-1 ring-primary/5" : ""}`}
                     >
                       <p
-                        className={`text-[10px] font-black uppercase tracking-tighter ${selectedTimingSessionId === s.id ? "text-primary" : "text-muted-foreground"}`}
+                        className={`text-[10px] flex justify-between items-center font-black uppercase tracking-tighter ${selectedTimingSessionId === s.id ? "text-primary" : "text-muted-foreground"}`}
                       >
-                        {s.date}
+                        <span>{s.date}</span>
+                        <span className="text-[8px] opacity-70 font-bold">{(s.legacy_filemaker_id || s.trainerId === 'legacy-trainer' || s.trainerInitials === 'Legacy' || s.trainerInitials === 'Chart') ? 'Imported' : s.startTime ? new Date(s.startTime?.toMillis?.() || s.startTime).toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                       </p>
                       <p className="text-xs font-bold truncate mt-1">
                         {s.routineName || "Free Session"}

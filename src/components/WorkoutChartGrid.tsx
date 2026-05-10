@@ -69,6 +69,16 @@ export function WorkoutChartGrid({
   const [clientSettings, setClientSettings] = useState<ClientMachineSetting[]>([]);
   const [editingSettings, setEditingSettings] = useState<{machineId: string, settings: Record<string, string>} | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [sessionLimit, setSessionLimit] = useState(30);
+  
+  // Memoized log lookup map for O(1) rendering performance
+  const logMap = React.useMemo(() => {
+    const map = new Map<string, ExerciseLog>();
+    exerciseLogs.forEach(log => {
+      map.set(`${log.machineId}_${log.sessionId}`, log);
+    });
+    return map;
+  }, [exerciseLogs]);
   
   // Filtering states
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'A' | 'B'>('ALL');
@@ -83,19 +93,47 @@ export function WorkoutChartGrid({
   useEffect(() => {
     if (!clientId || !user) return;
 
-    // Full Session History
+    // Session History with limit for performance
     const sessionsQ = query(
       collection(db, 'sessions'),
       where('clientId', '==', clientId),
       where('status', '==', 'Completed'),
-      orderBy('date', 'desc') // No limit, need full history
+      orderBy('date', 'desc'),
+      limit(sessionLimit)
     );
 
-    const unsubscribeSessions = onSnapshot(sessionsQ, (snap) => {
+    const unsubscribeSessions = onSnapshot(sessionsQ, async (snap) => {
       const sessData = snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkoutSession));
       sessData.sort((a, b) => parseSessionDate(b.date) - parseSessionDate(a.date));
+      
       // Grid view: Left -> Right: Oldest -> Newest
-      setSessions(sessData.reverse());
+      const finalSessions = sessData.reverse();
+      setSessions(finalSessions);
+
+      // Only fetch logs for these specific sessions to save reads and memory
+      if (finalSessions.length > 0) {
+        const sessionIds = finalSessions.map(s => s.id!).filter(Boolean);
+        
+        // Split into chunks if exceeds 30 due to Firestore 'in' limit
+        const chunks = [];
+        for (let i = 0; i < sessionIds.length; i += 30) {
+          chunks.push(sessionIds.slice(i, i + 30));
+        }
+
+        let allFetchedLogs: ExerciseLog[] = [];
+        for (const chunk of chunks) {
+          const logsQSub = query(
+            collection(db, 'exerciseLogs'),
+            where('sessionId', 'in', chunk)
+          );
+          const logSnap = await getDocs(logsQSub);
+          allFetchedLogs = [
+            ...allFetchedLogs,
+            ...logSnap.docs.map(d => ({ id: d.id, ...d.data() } as ExerciseLog))
+          ];
+        }
+        setExerciseLogs(allFetchedLogs);
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'sessions');
     });
@@ -112,25 +150,11 @@ export function WorkoutChartGrid({
       handleFirestoreError(error, OperationType.GET, 'clientMachineSettings');
     });
 
-    // Real-time Exercise Logs for full history
-    const logsQ = query(
-      collection(db, 'exerciseLogs'),
-      where('clientId', '==', clientId)
-    );
-
-    const unsubscribeLogs = onSnapshot(logsQ, (snap) => {
-      const logsData = snap.docs.map(d => ({ id: d.id, ...d.data() } as ExerciseLog));
-      setExerciseLogs(logsData);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'exerciseLogs');
-    });
-
     return () => {
       unsubscribeSessions();
       unsubscribeSettings();
-      unsubscribeLogs();
     };
-  }, [clientId, user]);
+  }, [clientId, user, sessionLimit]);
 
   useEffect(() => {
     // Auto-scroll to the far right (newest sessions) when sessions are loaded
@@ -164,7 +188,7 @@ export function WorkoutChartGrid({
   };
 
   const getLog = (machineId: string, sessionId: string) => {
-    return exerciseLogs.find(l => l.machineId === machineId && l.sessionId === sessionId);
+    return logMap.get(`${machineId}_${sessionId}`);
   };
 
   const getSetting = (machineId: string) => {
@@ -245,6 +269,15 @@ export function WorkoutChartGrid({
                     Routine B
                   </Button>
                 )}
+                
+                <div className="h-6 w-[1px] bg-slate-700/50 mx-2 self-center hidden sm:block" />
+                <Button
+                  size="sm"
+                  onClick={() => setSessionLimit(prev => prev + 20)}
+                  className="h-6 px-3 rounded-md text-[9px] font-black uppercase tracking-widest bg-[#38BDF8]/10 text-[#38BDF8] border border-[#38BDF8]/20 hover:bg-[#38BDF8]/20 transition-all font-mono"
+                >
+                  More History (+20)
+                </Button>
               </div>
             </div>
           </div>
