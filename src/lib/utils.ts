@@ -51,6 +51,22 @@ export function parseSessionDate(dateString: string | undefined): number {
 }
 
 /**
+ * Safely extract milliseconds from Firestore Timestamp, JS Date, or simple object
+ */
+export function getMillis(dateObj: any): number {
+  if (!dateObj) return 0;
+  if (typeof dateObj.toMillis === 'function') return dateObj.toMillis();
+  if (typeof dateObj.getTime === 'function') return dateObj.getTime();
+  if (dateObj.seconds !== undefined) return dateObj.seconds * 1000 + ((dateObj.nanoseconds || 0) / 1000000);
+  try {
+    const parsed = new Date(dateObj).getTime();
+    return isNaN(parsed) ? 0 : parsed;
+  } catch(e) {
+    return 0;
+  }
+}
+
+/**
  * Calculate the total volume lifted during an exercise.
  * For standard exercises: Volume = Weight * Reps.
  * For Time Static Contractions (TSC): Every 30 seconds counts as 2 reps. 

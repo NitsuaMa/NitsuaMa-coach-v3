@@ -24,7 +24,6 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CreateTrainerModal } from './CreateTrainerModal';
-import { PresentationDataSeeder } from './PresentationDataSeeder';
 import { Machine, Client, Trainer, WorkoutSession, ScheduleEntry } from '../types';
 import { findMatchingTrainer, normalizeName } from '../lib/sync-utils';
 
@@ -847,22 +846,7 @@ export function TrainerControlHubView({
 
                   <div className="h-px bg-slate-700/50 w-full my-6"></div>
 
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-6 bg-slate-900/50 border border-[#F06C22]/20 rounded-2xl gap-6">
-                    <div className="space-y-2">
-                       <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-[#F06C22] shadow-[0_0_8px_#F06C22]"></div>
-                          <Label className="text-sm font-bold text-white">Development Tools</Label>
-                       </div>
-                       <p className="text-[10px] text-slate-400 font-medium leading-relaxed max-w-sm">Generate a mock client profile with 16 sessions of historical progression data for testing.</p>
-                    </div>
-                    <Button 
-                      onClick={onSeedDemoClient} 
-                      className="h-12 px-6 rounded-xl font-black bg-[#0A2E46] border border-[#F06C22]/30 hover:bg-[#F06C22] hover:text-white text-[#F06C22] shadow-lg text-[10px] uppercase tracking-widest shrink-0 transition-all"
-                    >
-                      <Database className="w-4 h-4 mr-2" />
-                      Seed Demo Client
-                    </Button>
-                  </div>
+
 
                   <div className="h-px bg-slate-700/50 w-full my-6"></div>
 
@@ -979,9 +963,6 @@ export function TrainerControlHubView({
                      </div>
                   </CardContent>
                 </Card>
-                
-                {/* Presentation Data Seeder */}
-                <PresentationDataSeeder machines={machines} />
                 </>
               )}
             </div>

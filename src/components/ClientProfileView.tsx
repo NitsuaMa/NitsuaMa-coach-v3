@@ -13,6 +13,8 @@ import {
   doc,
   serverTimestamp,
   Timestamp,
+  getCountFromServer,
+  deleteDoc
 } from "firebase/firestore";
 import { db, auth } from "../firebase";
 import {
@@ -38,7 +40,7 @@ import {
   Maximize2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
+import { AreaChart, Area, LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
 import { MachineSettingsDashboardModal } from "./MachineSettingsDashboardModal";
 import {
   Card,
@@ -91,7 +93,7 @@ import { WorkoutChartGrid } from "./WorkoutChartGrid";
 import { ClientHistoryCalendar } from "./ClientHistoryCalendar";
 import { OccupationSelect } from "./OccupationSelect";
 import { getErgonomicRisk } from "../data/occupational-matrix";
-import { cn, parseSessionDate } from "../lib/utils";
+import { cn, parseSessionDate, getMillis, calculateExerciseVolume } from "../lib/utils";
 import { RoutineBuilderView } from "./RoutineBuilderView";
 import { CLINICAL_FLAGS_MATRIX } from "../data/clinical-matrix";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
@@ -152,6 +154,21 @@ export function ClientProfileView({
   const [historyPage, setHistoryPage] = useState(0);
   const [showFullChart, setShowFullChart] = useState(false);
   const [sessionLimit, setSessionLimit] = useState(10);
+  const [calculatedSessionCount, setCalculatedSessionCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (!clientId) return;
+    const fetchSessionCount = async () => {
+      try {
+        const snapshot = await getCountFromServer(query(collection(db, "sessions"), where("clientId", "==", clientId), where("status", "==", "Completed")));
+        setCalculatedSessionCount(snapshot.data().count);
+      } catch (err) {
+        console.error("Error fetching session count", err);
+      }
+    };
+    fetchSessionCount();
+  }, [clientId, sessions]); // re-fetch when sessions state changes
+
   useEffect(() => {
     const handleOpenImport = () => setView("chart-importer" as any);
     window.addEventListener('open-bulk-import', handleOpenImport);
@@ -854,11 +871,11 @@ export function ClientProfileView({
                   variant="outline"
                   className="bg-[#38BDF8]/10 text-[#38BDF8] border-[#38BDF8]/30 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest shadow-[0_0_10px_rgba(56,189,248,0.2)]"
                 >
-                  Session #{client.sessionCount ?? 0}
+                  Session #{calculatedSessionCount}
                 </Badge>
                 <button
                   onClick={() => {
-                    setSessionCountInput(String(client.sessionCount ?? 0));
+                    setSessionCountInput(String(calculatedSessionCount));
                     setIsEditingSessionCount(true);
                   }}
                   className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/10 rounded-full"
@@ -1593,6 +1610,23 @@ export function ClientProfileView({
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={async () => {
+                              if (confirm('Are you sure you want to delete this progress report?')) {
+                                try {
+                                  await deleteDoc(doc(db, 'progressReports', report.id!));
+                                } catch (err) {
+                                  handleFirestoreError(err, OperationType.DELETE, 'progressReports');
+                                }
+                              }
+                            }}
+                            className="rounded-xl font-black uppercase italic text-[10px] tracking-widest text-red-500 hover:text-red-600 hover:bg-red-500/10 mr-2"
+                          >
+                            <Trash2 className="w-3 h-3 md:mr-2" />
+                            <span className="hidden md:inline">Delete</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => onSelectReport(report.id!)}
                             className="rounded-xl font-black uppercase italic text-[10px] tracking-widest text-primary"
                           >
@@ -1630,8 +1664,8 @@ export function ClientProfileView({
             sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
             const machineBaselines: Record<string, number> = {};
-            const currentWeights: Record<string, number> = {};
-            const dailyIncreases: Record<string, { totalInc: number, count: number, dateStr: string }> = {};
+            const machineStatsByDate: Record<string, Record<string, number>> = {};
+            const allDatesSet = new Set<string>();
 
             const allLogsSorted = [...allLogs].sort((a,b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
             
@@ -1641,49 +1675,68 @@ export function ClientProfileView({
                 if (!machineBaselines[l.machineId]) {
                   machineBaselines[l.machineId] = w;
                 }
-                currentWeights[l.machineId] = w;
-              }
-              
-              const time = l.createdAt?.toMillis?.() || 0;
-              if (time >= sixtyDaysAgo.getTime()) {
                 const session = sessions.find(s => s.id === l.sessionId);
-                if (session) {
-                  let totalPct = 0;
-                  let count = 0;
-                  for (const mId in currentWeights) {
-                     const base = machineBaselines[mId];
-                     const curr = currentWeights[mId];
-                     if (base > 0) {
-                       totalPct += ((curr - base) / base) * 100;
-                       count++;
-                     }
+                const time = l.createdAt?.toMillis?.() || 0;
+                if (session && session.date && time >= sixtyDaysAgo.getTime()) {
+                  const dateStr = new Date(parseSessionDate(session.date)).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                  if (!machineStatsByDate[dateStr]) {
+                    machineStatsByDate[dateStr] = {};
                   }
-                  const avgPct = count > 0 ? (totalPct / count) : 0;
-                  const dateStr = session.date ? new Date(parseSessionDate(session.date)).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
-                  if (dateStr) {
-                    dailyIncreases[session.id!] = { totalInc: avgPct, count: 1, dateStr };
-                  }
+                  const base = machineBaselines[l.machineId];
+                  machineStatsByDate[dateStr][l.machineId] = ((w - base) / base) * 100;
+                  allDatesSet.add(dateStr);
                 }
               }
             });
 
-            const growthChartData = Object.values(dailyIncreases).map(d => ({
-              date: d.dateStr,
-              increase: Math.round(d.totalInc * 10) / 10
-            }));
+            const sortedDates = Array.from(allDatesSet).sort((a, b) => new Date(a + " " + new Date().getFullYear()).getTime() - new Date(b + " " + new Date().getFullYear()).getTime());
+            
+            let lastKnownStats: Record<string, number> = {};
+            const growthChartData = sortedDates.map(dateStr => {
+              const currentStats = machineStatsByDate[dateStr];
+              const row: any = { date: dateStr };
+              machines.forEach(m => {
+                if (currentStats[m.id] !== undefined) {
+                  row[m.id] = Math.round(currentStats[m.id] * 10) / 10;
+                  lastKnownStats[m.id] = row[m.id];
+                } else if (lastKnownStats[m.id] !== undefined) {
+                  row[m.id] = lastKnownStats[m.id];
+                }
+              });
+              return row;
+            });
 
             const CustomGrowthTooltip = ({ active, payload }: any) => {
               if (active && payload && payload.length) {
                 const data = payload[0].payload;
                 return (
-                  <div className="bg-[#0A2E46] border border-slate-700 p-3 rounded-lg shadow-xl">
-                    <p className="text-[10px] uppercase tracking-widest text-[#68717A] mb-1">{data.date}</p>
-                    <p className="text-[#F06C22] font-black text-xl leading-none">+{data.increase}%</p>
+                  <div className="bg-[#0A2E46] border border-slate-700 p-3 rounded-lg shadow-xl min-w-[150px]">
+                    <p className="text-[10px] uppercase tracking-widest text-[#68717A] mb-2">{data.date}</p>
+                    <div className="space-y-1">
+                      {payload.map((entry: any, index: number) => {
+                        const machine = machines.find(m => m.id === entry.dataKey);
+                        if (!machine) return null;
+                        return (
+                          <div key={index} className="flex justify-between items-center text-xs">
+                            <span style={{ color: entry.color }} className="font-bold truncate max-w-[80px]">{machine.name}</span>
+                            <span className="font-black text-white ml-3">+{entry.value}%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               }
               return null;
             };
+
+            // Colors for up to 20 machines (repeats if more)
+            const strokeColors = [
+              "#F06C22", "#38BDF8", "#34D399", "#FBBF24", "#F472B6", 
+              "#A78BFA", "#4ADE80", "#F87171", "#60A5FA", "#3B82F6",
+              "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899",
+              "#14B8A6", "#84CC16", "#EAB308", "#6366F1", "#D946EF"
+            ];
 
             return (
               <Card className="rounded-[40px] border-2 shadow-xl overflow-hidden bg-[#0A2E46] border-[#0A2E46]">
@@ -1691,10 +1744,10 @@ export function ClientProfileView({
                   <div className="flex justify-between items-center">
                     <div>
                       <CardTitle className="text-xl font-black uppercase tracking-widest text-slate-300">
-                        Overall Strength Progression
+                        Individual Strength Progression
                       </CardTitle>
                       <CardDescription className="text-xs font-bold uppercase tracking-widest mt-2 text-[#F06C22]">
-                        60-Day Global Aggregate (% Increase)
+                        60-Day Machine Specifics (% Increase)
                       </CardDescription>
                     </div>
                   </div>
@@ -1702,13 +1755,7 @@ export function ClientProfileView({
                 <CardContent className="p-8 h-[350px]">
                   {growthChartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={growthChartData} margin={{ top: 20, right: 20, left: -20, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="colorIncrease" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#F06C22" stopOpacity={0.4}/>
-                            <stop offset="95%" stopColor="#0A2E46" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
+                      <LineChart data={growthChartData} margin={{ top: 20, right: 20, left: -20, bottom: 0 }}>
                         <XAxis 
                           dataKey="date" 
                           stroke="#68717A" 
@@ -1725,14 +1772,126 @@ export function ClientProfileView({
                           tickFormatter={(val) => `+${val}%`}
                         />
                         <RechartsTooltip content={<CustomGrowthTooltip />} />
+                        {machines.map((m, idx) => {
+                          // Only render line if at least one data point exists for this machine
+                          const hasData = growthChartData.some(d => d[m.id] !== undefined);
+                          if (!hasData) return null;
+                          return (
+                            <Line 
+                              key={m.id}
+                              type="monotone" 
+                              dataKey={m.id} 
+                              stroke={strokeColors[idx % strokeColors.length]} 
+                              strokeWidth={3}
+                              dot={false}
+                              activeDot={{ r: 4, fill: "#fff", strokeWidth: 2 }}
+                              connectNulls
+                            />
+                          );
+                        })}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center opacity-30">
+                      <TrendingUp className="w-12 h-12 text-[#68717A] mb-4" />
+                      <p className="text-xs font-black uppercase tracking-widest text-[#68717A]">Not enough data in the last 60 days</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* 60-Day Global Volume Chart */}
+          {(() => {
+            const sixtyDaysAgo = new Date();
+            sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+            const volumeByDate: Record<string, number> = {};
+            const completedSessions = sessions.filter(s => s.status === 'Completed').reverse(); // reverse chronological already reversed for rendering?
+            const chronologicalSessions = [...completedSessions].sort((a,b) => parseSessionDate(a.date) - parseSessionDate(b.date));
+
+            chronologicalSessions.forEach(session => {
+               const time = getMillis(session.createdAt) || parseSessionDate(session.date);
+               if (time >= sixtyDaysAgo.getTime()) {
+                  const sLogs = allLogs.filter(l => l.sessionId === session.id);
+                  const totalVol = sLogs.reduce((acc, log) => acc + calculateExerciseVolume(log), 0);
+                  const dateStr = session.date ? new Date(parseSessionDate(session.date)).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+                  if (dateStr) {
+                    // Accumulate in case of multiple sessions a day
+                    volumeByDate[dateStr] = (volumeByDate[dateStr] || 0) + totalVol;
+                  }
+               }
+            });
+
+            const volumeChartData = Object.keys(volumeByDate).map(dateStr => ({
+               date: dateStr,
+               volume: volumeByDate[dateStr]
+            }));
+
+            const CustomVolumeTooltip = ({ active, payload, label }: any) => {
+              if (active && payload && payload.length) {
+                return (
+                  <div className="bg-[#0A2E46] border border-slate-700 p-3 rounded-lg shadow-xl min-w-[120px]">
+                    <p className="text-[10px] uppercase tracking-widest text-[#68717A] mb-1">{label}</p>
+                    <p className="text-[#38BDF8] font-black text-xl leading-none">{payload[0].value.toLocaleString()} <span className="text-xs text-white">LBS</span></p>
+                  </div>
+                );
+              }
+              return null;
+            };
+
+            return (
+              <Card className="rounded-[40px] border-2 shadow-xl overflow-hidden min-h-[400px]">
+                <CardHeader className="p-8 border-b bg-muted/20">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <CardTitle className="text-xl font-black uppercase italic tracking-tighter">
+                        Total Volume Progression
+                      </CardTitle>
+                      <CardDescription className="text-[10px] font-bold uppercase tracking-widest mt-1">
+                        60-Day Work Capacity Trend
+                      </CardDescription>
+                    </div>
+                    <Badge variant="outline" className="text-[9px] font-black bg-[#38BDF8]/10 text-[#38BDF8] border-[#38BDF8]/20">
+                      Workload
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-8 h-[350px]">
+                  {volumeChartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={volumeChartData} margin={{ top: 20, right: 20, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorVolume" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#38BDF8" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#0A2E46" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <XAxis 
+                          dataKey="date" 
+                          stroke="#68717A" 
+                          tick={{ fill: "#68717A", fontSize: 10, fontWeight: 700 }} 
+                          tickMargin={10} 
+                          axisLine={false} 
+                          tickLine={false} 
+                        />
+                        <YAxis 
+                          stroke="#68717A" 
+                          tick={{ fill: "#68717A", fontSize: 10 }} 
+                          axisLine={false} 
+                          tickLine={false}
+                          tickFormatter={(val) => val >= 1000 ? `${(val/1000).toFixed(1)}k` : val}
+                        />
+                        <RechartsTooltip content={<CustomVolumeTooltip />} />
                         <Area 
                           type="monotone" 
-                          dataKey="increase" 
-                          stroke="#F06C22" 
+                          dataKey="volume" 
+                          stroke="#38BDF8" 
                           strokeWidth={4}
                           fillOpacity={1} 
-                          fill="url(#colorIncrease)" 
-                          activeDot={{ r: 6, fill: "#fff", stroke: "#F06C22", strokeWidth: 2 }}
+                          fill="url(#colorVolume)" 
+                          activeDot={{ r: 6, fill: "#fff", stroke: "#38BDF8", strokeWidth: 2 }}
                         />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -1768,7 +1927,7 @@ export function ClientProfileView({
 
                     const totalMins = completedSessions.reduce((acc, s) => {
                       return (
-                        acc + (s.endTime!.toMillis() - s.startTime!.toMillis())
+                        acc + (getMillis(s.endTime) - getMillis(s.startTime))
                       );
                     }, 0);
                     const avgMins = Math.round(
@@ -1813,12 +1972,12 @@ export function ClientProfileView({
                         <span className="text-[8px] opacity-70 font-bold">{(s.legacy_filemaker_id || s.trainerId === 'legacy-trainer' || s.trainerInitials === 'Legacy' || s.trainerInitials === 'Chart') ? 'Imported' : s.startTime ? new Date(s.startTime?.toMillis?.() || s.startTime).toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                       </p>
                       <p className="text-xs font-bold truncate mt-1">
-                        {s.routineName || "Free Session"}
+                        {s.routineName || "Session"}
                       </p>
                       {s.startTime && s.endTime && (
                         <p className="text-[9px] font-bold text-muted-foreground/60 uppercase mt-1">
                           {Math.round(
-                            (s.endTime.toMillis() - s.startTime.toMillis()) /
+                            (getMillis(s.endTime) - getMillis(s.startTime)) /
                               60000,
                           )}{" "}
                           mins
@@ -1888,8 +2047,8 @@ export function ClientProfileView({
                           <div className="text-right">
                             <p className="text-xl font-black italic text-foreground leading-none">
                               {Math.round(
-                                (focusSession.endTime.toMillis() -
-                                  focusSession.startTime.toMillis()) /
+                                (getMillis(focusSession.endTime) -
+                                  getMillis(focusSession.startTime)) /
                                   60000,
                               )}
                               m
@@ -2004,10 +2163,8 @@ export function ClientProfileView({
                                 .filter((log) => log.sessionId === s.id)
                                 .sort((a, b) => {
                                   return (
-                                    (a.updatedAt?.toMillis() ||
-                                      a.createdAt?.toMillis()) -
-                                    (b.updatedAt?.toMillis() ||
-                                      b.createdAt?.toMillis())
+                                    (getMillis(a.updatedAt) || getMillis(a.createdAt)) -
+                                    (getMillis(b.updatedAt) || getMillis(b.createdAt))
                                   );
                                 });
 
@@ -2016,15 +2173,11 @@ export function ClientProfileView({
                               );
                               if (idx === -1) return;
 
-                              const lTime =
-                                l.updatedAt?.toMillis() ||
-                                l.createdAt?.toMillis();
+                              const lTime = getMillis(l.updatedAt) || getMillis(l.createdAt);
                               const pTime =
                                 idx === 0
-                                  ? s.startTime?.toMillis() ||
-                                    s.createdAt?.toMillis()
-                                  : sLogs[idx - 1].updatedAt?.toMillis() ||
-                                    sLogs[idx - 1].createdAt?.toMillis();
+                                  ? getMillis(s.startTime) || getMillis(s.createdAt)
+                                  : getMillis(sLogs[idx - 1].updatedAt) || getMillis(sLogs[idx - 1].createdAt);
 
                               let diffMs = 0;
                               if (l.timeSpent) {
@@ -2750,6 +2903,9 @@ export function ClientProfileView({
             routines={routines}
             onBack={() => setShowFullChart(false)}
             user={user}
+            preloadedSessions={sessions}
+            preloadedLogs={allLogs}
+            onLoadMoreHistory={() => setSessionLimit(prev => prev + 20)}
           />
         )}
       </AnimatePresence>

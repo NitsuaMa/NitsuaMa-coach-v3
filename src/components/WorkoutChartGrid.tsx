@@ -54,15 +54,21 @@ interface WorkoutChartGridProps {
   routines: Routine[];
   onBack: () => void;
   user?: any;
+  preloadedSessions?: WorkoutSession[];
+  preloadedLogs?: ExerciseLog[];
+  onLoadMoreHistory?: () => void;
 }
 
 export function WorkoutChartGrid({ 
   clientId, 
-  clients, 
+  clients,
   machines,
   routines,
   onBack,
-  user
+  user,
+  preloadedSessions,
+  preloadedLogs,
+  onLoadMoreHistory
 }: WorkoutChartGridProps) {
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
@@ -70,6 +76,19 @@ export function WorkoutChartGrid({
   const [editingSettings, setEditingSettings] = useState<{machineId: string, settings: Record<string, string>} | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [sessionLimit, setSessionLimit] = useState(30);
+
+  // Sync with props
+  useEffect(() => {
+    if (preloadedSessions) {
+      setSessions([...preloadedSessions].filter(s => s.status === 'Completed').reverse());
+    }
+  }, [preloadedSessions]);
+
+  useEffect(() => {
+    if (preloadedLogs) {
+      setExerciseLogs(preloadedLogs);
+    }
+  }, [preloadedLogs]);
   
   // Memoized log lookup map for O(1) rendering performance
   const logMap = React.useMemo(() => {
@@ -93,50 +112,54 @@ export function WorkoutChartGrid({
   useEffect(() => {
     if (!clientId || !user) return;
 
-    // Session History with limit for performance
-    const sessionsQ = query(
-      collection(db, 'sessions'),
-      where('clientId', '==', clientId),
-      where('status', '==', 'Completed'),
-      orderBy('date', 'desc'),
-      limit(sessionLimit)
-    );
+    let unsubscribeSessions = () => {};
 
-    const unsubscribeSessions = onSnapshot(sessionsQ, async (snap) => {
-      const sessData = snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkoutSession));
-      sessData.sort((a, b) => parseSessionDate(b.date) - parseSessionDate(a.date));
-      
-      // Grid view: Left -> Right: Oldest -> Newest
-      const finalSessions = sessData.reverse();
-      setSessions(finalSessions);
+    if (!preloadedSessions) {
+      // Session History with limit for performance
+      const sessionsQ = query(
+        collection(db, 'sessions'),
+        where('clientId', '==', clientId),
+        where('status', '==', 'Completed'),
+        orderBy('date', 'desc'),
+        limit(sessionLimit)
+      );
 
-      // Only fetch logs for these specific sessions to save reads and memory
-      if (finalSessions.length > 0) {
-        const sessionIds = finalSessions.map(s => s.id!).filter(Boolean);
+      unsubscribeSessions = onSnapshot(sessionsQ, async (snap) => {
+        const sessData = snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkoutSession));
+        sessData.sort((a, b) => parseSessionDate(b.date) - parseSessionDate(a.date));
         
-        // Split into chunks if exceeds 30 due to Firestore 'in' limit
-        const chunks = [];
-        for (let i = 0; i < sessionIds.length; i += 30) {
-          chunks.push(sessionIds.slice(i, i + 30));
-        }
+        // Grid view: Left -> Right: Oldest -> Newest
+        const finalSessions = sessData.reverse();
+        setSessions(finalSessions);
 
-        let allFetchedLogs: ExerciseLog[] = [];
-        for (const chunk of chunks) {
-          const logsQSub = query(
-            collection(db, 'exerciseLogs'),
-            where('sessionId', 'in', chunk)
-          );
-          const logSnap = await getDocs(logsQSub);
-          allFetchedLogs = [
-            ...allFetchedLogs,
-            ...logSnap.docs.map(d => ({ id: d.id, ...d.data() } as ExerciseLog))
-          ];
+        // Only fetch logs for these specific sessions to save reads and memory
+        if (finalSessions.length > 0 && !preloadedLogs) {
+          const sessionIds = finalSessions.map(s => s.id!).filter(Boolean);
+          
+          // Split into chunks if exceeds 30 due to Firestore 'in' limit
+          const chunks = [];
+          for (let i = 0; i < sessionIds.length; i += 30) {
+            chunks.push(sessionIds.slice(i, i + 30));
+          }
+
+          let allFetchedLogs: ExerciseLog[] = [];
+          for (const chunk of chunks) {
+            const logsQSub = query(
+              collection(db, 'exerciseLogs'),
+              where('sessionId', 'in', chunk)
+            );
+            const logSnap = await getDocs(logsQSub);
+            allFetchedLogs = [
+              ...allFetchedLogs,
+              ...logSnap.docs.map(d => ({ id: d.id, ...d.data() } as ExerciseLog))
+            ];
+          }
+          setExerciseLogs(allFetchedLogs);
         }
-        setExerciseLogs(allFetchedLogs);
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'sessions');
-    });
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, 'sessions');
+      });
+    }
 
     // Client Settings (Master Reference)
     const settingsQ = query(
@@ -273,7 +296,7 @@ export function WorkoutChartGrid({
                 <div className="h-6 w-[1px] bg-slate-700/50 mx-2 self-center hidden sm:block" />
                 <Button
                   size="sm"
-                  onClick={() => setSessionLimit(prev => prev + 20)}
+                  onClick={() => onLoadMoreHistory ? onLoadMoreHistory() : setSessionLimit(prev => prev + 20)}
                   className="h-6 px-3 rounded-md text-[9px] font-black uppercase tracking-widest bg-[#38BDF8]/10 text-[#38BDF8] border border-[#38BDF8]/20 hover:bg-[#38BDF8]/20 transition-all font-mono"
                 >
                   More History (+20)

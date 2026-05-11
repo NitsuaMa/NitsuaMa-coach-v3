@@ -12,6 +12,7 @@ import { Client, Machine, ExerciseLog, Routine, WorkoutSession, TrainerFocus, Se
 import { HistoricalMachinePerformance } from '../lib/historical-utils';
 
 import { calculateStartingWeight } from '../lib/consultation-utils';
+import { getMillis } from '../lib/utils';
 
 interface PreSessionOverviewProps {
   authTrainer: Trainer | null;
@@ -506,7 +507,7 @@ export function PreSessionOverview({
                  <p className="text-xs text-slate-500 text-center font-medium italic p-4">No notes found.</p>
                ) : (
                  displayNotes.map(note => (
-                   <div key={note.id || note.createdAt?.toMillis()} className={`bg-slate-800/50 p-3.5 rounded-2xl border ${note.priority === 'High' ? 'border-l-4 border-l-amber-500 border-slate-700/50 shadow-sm' : 'border-slate-700/50'}`}>
+                   <div key={note.id || getMillis(note.createdAt)} className={`bg-slate-800/50 p-3.5 rounded-2xl border ${note.priority === 'High' ? 'border-l-4 border-l-amber-500 border-slate-700/50 shadow-sm' : 'border-slate-700/50'}`}>
                      <div className="flex justify-between items-start mb-2">
                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{note.trainerInitials || 'System'}</span>
                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{note.createdAt?.toDate ? new Date(note.createdAt.toDate()).toLocaleDateString() : ''}</span>

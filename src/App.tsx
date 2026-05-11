@@ -2792,10 +2792,12 @@ function ClientsView({
 
   const findClientForSession = (session: any) => {
     if (!session) return null;
+    const sName = (session.clientName || '').trim().toLowerCase();
     return clients.find(c => 
       c.id === session.clientId || 
-      c.mindbody_name?.toLowerCase() === session.clientName.toLowerCase() ||
-      `${c.firstName} ${c.lastName}`.toLowerCase() === session.clientName.toLowerCase()
+      (c.mindbody_name && c.mindbody_name.trim().toLowerCase() === sName) ||
+      `${c.firstName} ${c.lastName}`.trim().toLowerCase() === sName ||
+      `${c.firstName} ${c.lastName}`.trim().toLowerCase().replace(/[^a-z0-9]/g, '') === sName.replace(/[^a-z0-9]/g, '')
     );
   };
 
@@ -3226,7 +3228,8 @@ function ClientsView({
                             const color = TRAINER_COLORS[tIdx % TRAINER_COLORS.length];
                             const isCompleted = session && (session.status === 'Completed' || session.startTime.toDate() < now);
                             const clientObj = session ? findClientForSession(session) : null;
-                            const sessionNumber = clientObj ? sessions.filter(s => s.clientId === clientObj.id).length + 1 : 1;
+                            const workoutSession = clientObj ? sessions.find(s => s.clientId === clientObj.id && new Date(s.createdAt?.toDate?.() || s.date).toDateString() === new Date().toDateString()) : null;
+                            const sessionNumber = workoutSession ? workoutSession.sessionNumber : (clientObj ? (clientObj.sessionCount || 0) + 1 : 1);
                             const hasAlert = clientObj && (
                               (clientObj.clinicalProfile && clientObj.clinicalProfile.length > 0) ||
                               !!clientObj.clinicalNotes ||
@@ -5564,11 +5567,18 @@ function WorkoutTrackerView({
       // 2. Sync all local logs
       const sessionLogs = Object.values(logs).filter((l: any) => l.sessionId === currentSession.id);
       
-      const cleanData = (obj: any) => {
+      const cleanData = (obj: any): any => {
+        if (obj === null || obj === undefined) return obj;
+        if (Array.isArray(obj)) return obj.map(cleanData);
+        if (typeof obj !== 'object') return obj;
+        
+        // Preserve standard dates or Firestore objects
+        if (typeof obj.toDate === 'function' || obj.constructor?.name === 'FieldValue' || obj instanceof Date) return obj;
+
         const cleaned: any = {};
         Object.keys(obj).forEach(key => {
           if (obj[key] !== undefined) {
-            cleaned[key] = obj[key];
+            cleaned[key] = cleanData(obj[key]);
           }
         });
         return cleaned;
@@ -5608,7 +5618,7 @@ function WorkoutTrackerView({
           const log = logObj as any;
           if (log.weight || log.reps || log.seconds) {
              const key = `currentMachineMetrics.${log.machineId}`;
-             clientUpdates[key] = {
+             clientUpdates[key] = cleanData({
                 weight: log.weight || '0',
                 reps: log.reps,
                 seconds: log.seconds,
@@ -5620,7 +5630,7 @@ function WorkoutTrackerView({
                 lastPerformedDate: serverTimestamp(),
                 lastPerformedSessionNumber: currentSession.sessionNumber,
                 lastSessionId: currentSession.id
-             };
+             });
           }
         });
 

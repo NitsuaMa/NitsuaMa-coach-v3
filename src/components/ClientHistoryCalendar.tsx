@@ -162,6 +162,14 @@ export function ClientHistoryCalendar({
         batch.delete(doc(db, 'exerciseLogs', log.id!));
       });
 
+      // decrement client's session count if completed
+      if (selectedSession.status === 'Completed' && clientId) {
+        batch.update(doc(db, 'clients', clientId), {
+          completedSessions: increment(-1),
+          sessionCount: increment(-1)
+        });
+      }
+
       await batch.commit();
 
       if (selectedDaySessions.length <= 1) {
@@ -427,6 +435,7 @@ export function ClientHistoryCalendar({
             {sessions.map((session, index, arr) => {
                const timestamp = parseSessionDate(session.date);
                const sDate = timestamp > 0 ? new Date(timestamp) : null;
+               const calculatedSessionNumber = arr.length - index;
                
                // Calculate days since previous session (which is the next item in the reverse-chronological array)
                let daysSincePrev = null;
@@ -472,7 +481,8 @@ export function ClientHistoryCalendar({
 
                    <div className="flex-1 min-w-0 flex flex-col justify-center">
                       <div className="flex items-center gap-3 mb-1 flex-wrap">
-                        <span className="text-lg font-black text-white uppercase tracking-tighter shrink-0">
+                        <span className="text-lg font-black text-white uppercase tracking-tighter shrink-0 flex items-center gap-2">
+                          <Badge variant="outline" className="text-[9px] font-black text-[#38BDF8] uppercase tracking-widest border-[#38BDF8]/30 bg-[#38BDF8]/10 py-0 leading-tight h-5">S{calculatedSessionNumber}</Badge>
                           {isLegacy ? 'Import Session' : session.startTime && timestamp > 0 ? new Date(session.startTime?.toMillis?.() || session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (sDate ? '12:00 PM' : '--:--')}
                         </span>
                         {daysSincePrev !== null && (
@@ -572,23 +582,27 @@ export function ClientHistoryCalendar({
               {/* Multi-Session Tabs if > 1 */}
               {selectedDaySessions.length > 1 && (
                 <div className="bg-[#0A2E46]/90 border-b border-slate-700 px-6 py-2 flex gap-2 shrink-0 overflow-x-auto hide-scrollbar">
-                   {selectedDaySessions.map((sess, i) => (
-                      <button
-                        key={sess.id}
-                        onClick={() => {
-                           setActiveSessionIndex(i);
-                           setIsEditMode(false);
-                        }}
-                        className={cn(
-                          "px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border",
-                          activeSessionIndex === i 
-                            ? "bg-[#38BDF8]/20 border-[#38BDF8]/50 text-[#38BDF8]" 
-                            : "bg-slate-800 border-slate-700 text-slate-400 hover:text-white"
-                        )}
-                      >
-                         S{i + 1} - {sess.legacy_filemaker_id ? 'Imported' : sess.startTime ? new Date(sess.startTime?.toMillis?.() || sess.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'No Time'}
-                      </button>
-                   ))}
+                   {selectedDaySessions.map((sess, i) => {
+                     const globalIdx = sessions.findIndex(s => s.id === sess.id);
+                     const sessNum = globalIdx >= 0 ? sessions.length - globalIdx : '?';
+                     return (
+                       <button
+                         key={sess.id}
+                         onClick={() => {
+                            setActiveSessionIndex(i);
+                            setIsEditMode(false);
+                         }}
+                         className={cn(
+                           "px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border",
+                           activeSessionIndex === i 
+                             ? "bg-[#38BDF8]/20 border-[#38BDF8]/50 text-[#38BDF8]" 
+                             : "bg-slate-800 border-slate-700 text-slate-400 hover:text-white"
+                         )}
+                       >
+                          S{sessNum} - {sess.legacy_filemaker_id ? 'Imported' : sess.startTime ? new Date(sess.startTime?.toMillis?.() || sess.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'No Time'}
+                       </button>
+                     );
+                   })}
                 </div>
               )}
 
