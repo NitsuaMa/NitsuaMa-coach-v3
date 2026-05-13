@@ -87,6 +87,7 @@ import { OperationType, handleFirestoreError } from './lib/firestore-errors';
 // Removing duplicate cn import
 import { hashPin } from './lib/auth-utils';
 import { parseSessionDate, calculateExerciseVolume, safeToDate, getMillis } from './lib/utils';
+import { getLatestTargetWeight } from './lib/historical-utils';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TrainerControlHubView } from './components/TrainerControlHubView';
 import { InsightsDashboardView } from './components/InsightsDashboardView';
@@ -4214,24 +4215,40 @@ function PerformanceEntryDialog({
 }) {
   const prevLog = pastMachineLogs[0]?.log;
   const prevWeight = prevLog?.weight || '0';
-  const prevRepsLeft = prevLog?.isStaticHold ? (prevLog.seconds || '0') : (prevLog?.reps || '0');
-  const prevRepsRightStr = (prevLog as any)?.repsRight?.toString() || '0'; // Only used if using repsLeft/repsRight model, but we will pass initial values instead
 
   const initialWeight = parseFloat(currentWeight) > 0 ? parseFloat(currentWeight) : (parseFloat(prevWeight) || 0);
-  const initialReps = parseFloat(currentReps) > 0 ? parseFloat(currentReps) : (parseFloat(prevRepsLeft) || 0);
-  const initialRepsRight = currentRepsRight !== undefined && parseFloat(currentRepsRight) > 0 ? parseFloat(currentRepsRight) : (parseFloat(prevRepsRightStr) || initialReps);
+
+  const initialReps = currentReps !== '' ? parseFloat(currentReps) : '';
+  const initialRepsRight = currentRepsRight !== undefined && currentRepsRight !== '' ? parseFloat(currentRepsRight) : '';
   
-  const [current, setCurrent] = useState(initialWeight);
-  const [reps, setReps] = useState(initialReps);
-  const [repsRt, setRepsRt] = useState(initialRepsRight);
-  const [quality, setQuality] = useState(currentQuality || 2); 
+  const [current, setCurrent] = useState<number>(initialWeight);
+  const [reps, setReps] = useState<number | string>(initialReps);
+  const [repsRt, setRepsRt] = useState<number | string>(initialRepsRight);
+  const [quality, setQuality] = useState<number>(currentQuality || 0);
   const [isHold, setIsHold] = useState(isStaticHold || false);
 
   const roundUpTo2 = (val: number) => Math.ceil(val / 2) * 2;
 
   const adjustCurrent = (amount: number) => setCurrent(Math.max(0, roundUpTo2(current + amount)));
-  const adjustReps = (amount: number) => setReps(Math.max(0, reps + amount));
-  const adjustRepsRt = (amount: number) => setRepsRt(Math.max(0, repsRt + amount));
+  
+  const getBaseReps = (currentVal: string | number, prevValStr: string) => {
+    if (typeof currentVal === 'number' && currentVal > 0) return currentVal;
+    if (typeof currentVal === 'string' && currentVal !== '') return parseFloat(currentVal);
+    return parseFloat(prevValStr) || 0;
+  };
+
+  const prevRepsLeftPlaceholder = isHold ? (prevLog?.seconds || '') : (prevLog?.reps || '');
+  const prevRepsRightPlaceholder = (prevLog as any)?.repsRight || prevRepsLeftPlaceholder;
+
+  const adjustReps = (amount: number) => {
+    const base = getBaseReps(reps, prevRepsLeftPlaceholder);
+    setReps(Math.max(0, base + amount));
+  };
+  
+  const adjustRepsRt = (amount: number) => {
+    const base = getBaseReps(repsRt, prevRepsRightPlaceholder);
+    setRepsRt(Math.max(0, base + amount));
+  };
 
   const prevW = parseFloat(prevWeight) || 0;
   const weightDelta = prevW > 0 ? current - prevW : 0;
@@ -4346,8 +4363,9 @@ function PerformanceEntryDialog({
                       type="number"
                       inputMode="numeric"
                       value={reps || ''}
-                      onChange={e => setReps(parseFloat(e.target.value) || 0)}
-                      className="font-black text-4xl text-white tracking-tight leading-none bg-transparent border-none text-center outline-none w-full p-0 m-0 no-arrows focus:ring-0"
+                      onChange={e => setReps(e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
+                      placeholder={prevRepsLeftPlaceholder}
+                      className="font-black text-4xl text-white tracking-tight leading-none bg-transparent border-none text-center outline-none w-full p-0 m-0 no-arrows focus:ring-0 placeholder:text-slate-600/50"
                     />
                   </div>
 
@@ -4368,8 +4386,9 @@ function PerformanceEntryDialog({
                             type="number"
                             inputMode="numeric"
                             value={reps || ''}
-                            onChange={e => setReps(parseFloat(e.target.value) || 0)}
-                            className="font-black text-2xl text-white tracking-tight leading-none bg-transparent border-none text-center outline-none w-full p-0 m-0 no-arrows focus:ring-0 min-w-0"
+                            onChange={e => setReps(e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
+                            placeholder={prevRepsLeftPlaceholder}
+                            className="font-black text-2xl text-white tracking-tight leading-none bg-transparent border-none text-center outline-none w-full p-0 m-0 no-arrows focus:ring-0 min-w-0 placeholder:text-slate-600/50"
                           />
                           <button onClick={() => adjustReps(1)} className="w-8 h-8 rounded-lg bg-[#38BDF8] text-white font-black text-sm flex items-center justify-center shadow-lg active:scale-95 shrink-0">+</button>
                        </div>
@@ -4382,8 +4401,9 @@ function PerformanceEntryDialog({
                             type="number"
                             inputMode="numeric"
                             value={repsRt || ''}
-                            onChange={e => setRepsRt(parseFloat(e.target.value) || 0)}
-                            className="font-black text-2xl text-white tracking-tight leading-none bg-transparent border-none text-center outline-none w-full p-0 m-0 no-arrows focus:ring-0 min-w-0"
+                            onChange={e => setRepsRt(e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
+                            placeholder={prevRepsRightPlaceholder}
+                            className="font-black text-2xl text-white tracking-tight leading-none bg-transparent border-none text-center outline-none w-full p-0 m-0 no-arrows focus:ring-0 min-w-0 placeholder:text-slate-600/50"
                           />
                           <button onClick={() => adjustRepsRt(1)} className="w-8 h-8 rounded-lg bg-[#38BDF8] text-white font-black text-sm flex items-center justify-center shadow-lg active:scale-95 shrink-0">+</button>
                        </div>
@@ -5443,11 +5463,11 @@ function WorkoutTrackerView({
           if (side) payload.side = side;
           if (prevLog) {
             if (prevLog.weight) payload.weight = prevLog.weight;
-            if (prevLog.reps) payload.reps = prevLog.reps;
-            if (prevLog.seconds) payload.seconds = prevLog.seconds;
+            
+            // Intentionally not auto-filling reps, seconds, or repQuality per user request
+            
             if (prevLog.isStaticHold !== undefined) payload.isStaticHold = prevLog.isStaticHold;
             if (prevLog.isTSC !== undefined) payload.isTSC = prevLog.isTSC;
-            if (prevLog.repQuality) payload.repQuality = prevLog.repQuality;
           } else if (defaultWeight) {
             payload.weight = String(defaultWeight);
           }
@@ -6058,9 +6078,14 @@ function WorkoutTrackerView({
         const logL = isTorso ? logs[keyL] : logs[keyDef];
         const logR = isTorso ? logs[keyR] : undefined;
 
-        const currentWeight = (isTorso ? (logL?.weight || logR?.weight || '0') : (logL?.weight || '0'));
-        const currentRepsLeft = logL?.isStaticHold ? (logL.seconds || '0') : (logL?.reps || '0');
-        const currentRepsRightStr = logR?.isStaticHold ? (logR.seconds || '0') : (logR?.reps || '0');
+        let currentWeight = (isTorso ? (logL?.weight || logR?.weight) : logL?.weight) || '0';
+        const clientId = currentSession.clientId || selectedClient?.id;
+        if (currentWeight === '0' && clientId) {
+           currentWeight = getLatestTargetWeight(clientId, editingWeightMachineId, sessions, Object.values(logs), sideToUse);
+        }
+
+        const currentRepsLeft = logL ? (logL?.isStaticHold ? (logL.seconds || '') : (logL?.reps || '')) : '';
+        const currentRepsRightStr = logR ? (logR?.isStaticHold ? (logR.seconds || '') : (logR?.reps || '')) : '';
 
         return (
           <PerformanceEntryDialog 

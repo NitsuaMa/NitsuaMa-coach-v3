@@ -14,7 +14,8 @@ import {
   serverTimestamp,
   Timestamp,
   getCountFromServer,
-  deleteDoc
+  deleteDoc,
+  startAfter
 } from "firebase/firestore";
 import { db, auth } from "../firebase";
 import {
@@ -40,10 +41,9 @@ import {
   Maximize2,
   Battery,
   CalendarDays,
-  Clock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { AreaChart, Area, LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
+import { AreaChart, Area, LineChart, Line, BarChart, Bar, ReferenceLine, CartesianGrid, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from "recharts";
 import { MachineSettingsDashboardModal } from "./MachineSettingsDashboardModal";
 import {
   Card,
@@ -193,6 +193,7 @@ export function ClientProfileView({
   }, []);
 
   const [activeTab, setActiveTab] = useState("overview");
+  const [activeMachine, setActiveMachine] = useState<string | null>(null);
   const [infoForm, setInfoForm] = useState<Partial<Client>>({});
   const [newEventForm, setNewEventForm] = useState<{
     date: string;
@@ -534,7 +535,7 @@ export function ClientProfileView({
       );
 
       // Merge gracefully to not erase older paginated history if coach loaded more
-      setSessions((prev) => {
+      setSessions((prev: WorkoutSession[]) => {
         const merged = new Map(prev.map(s => [s.id, s]));
         liveSessionsData.forEach(s => merged.set(s.id, s));
         const finalArr = Array.from(merged.values());
@@ -798,6 +799,7 @@ export function ClientProfileView({
     const sixtyDaysAgo = new Date();
     sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
     const machineStatsByDate: Record<string, Record<string, number>> = {};
+    const machineWeightsByDate: Record<string, Record<string, number>> = {};
     const machineBaselines: Record<string, number> = {};
 
     [...allLogs]
@@ -816,12 +818,16 @@ export function ClientProfileView({
             if (!machineStatsByDate[dateStr]) {
               machineStatsByDate[dateStr] = {};
             }
+            if (!machineWeightsByDate[dateStr]) {
+              machineWeightsByDate[dateStr] = {};
+            }
             const base = machineBaselines[l.machineId];
             machineStatsByDate[dateStr][l.machineId] = ((w - base) / base) * 100;
+            machineWeightsByDate[dateStr][l.machineId] = w;
           }
         }
       });
-    return { machineStatsByDate, machineBaselines };
+    return { machineStatsByDate, machineWeightsByDate, machineBaselines };
   }, [allLogs, sessions]);
 
   const memoizedVolumeByDate = useMemo(() => {
@@ -1911,47 +1917,38 @@ export function ClientProfileView({
 
           {/* 60-Day Overall Growth Chart */}
           {(() => {
-            const sixtyDaysAgo = new Date();
-            sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-
-            const machineBaselines: Record<string, number> = {};
-            const machineStatsByDate: Record<string, Record<string, number>> = {};
+            const machineStatsByDate = memoizedMachineStatsByDate.machineStatsByDate;
+            const machineWeightsByDate = memoizedMachineStatsByDate.machineWeightsByDate;
             const allDatesSet = new Set<string>();
-
-            const allLogsSorted = [...allLogs].sort((a,b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
-            
-            allLogsSorted.forEach(l => {
-              const w = parseInt(l.weight || "0");
-              if (w > 0) {
-                if (!machineBaselines[l.machineId]) {
-                  machineBaselines[l.machineId] = w;
-                }
-                const session = sessions.find(s => s.id === l.sessionId);
-                const time = l.createdAt?.toMillis?.() || 0;
-                if (session && session.date && time >= sixtyDaysAgo.getTime()) {
-                  const dateStr = new Date(parseSessionDate(session.date)).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                  if (!machineStatsByDate[dateStr]) {
-                    machineStatsByDate[dateStr] = {};
-                  }
-                  const base = machineBaselines[l.machineId];
-                  machineStatsByDate[dateStr][l.machineId] = ((w - base) / base) * 100;
-                  allDatesSet.add(dateStr);
-                }
-              }
-            });
+            Object.keys(machineStatsByDate).forEach(d => allDatesSet.add(d));
 
             const sortedDates = Array.from(allDatesSet).sort((a, b) => new Date(a + " " + new Date().getFullYear()).getTime() - new Date(b + " " + new Date().getFullYear()).getTime());
             
             let lastKnownStats: Record<string, number> = {};
+            let lastKnownWeights: Record<string, number> = {};
+            const seenMachines = new Set<string>();
+
             const growthChartData = sortedDates.map(dateStr => {
               const currentStats = machineStatsByDate[dateStr];
+              const currentWeights = machineWeightsByDate[dateStr];
               const row: any = { date: dateStr };
               machines.forEach(m => {
-                if (currentStats[m.id] !== undefined) {
+                // If there's new data for this machine on this date
+                if (currentStats && currentStats[m.id] !== undefined) {
                   row[m.id] = Math.round(currentStats[m.id] * 10) / 10;
+                  row[m.id + '_weight'] = currentWeights[m.id];
                   lastKnownStats[m.id] = row[m.id];
-                } else if (lastKnownStats[m.id] !== undefined) {
+                  lastKnownWeights[m.id] = row[m.id + '_weight'];
+
+                  if (!seenMachines.has(m.id)) {
+                    row[m.id + '_isFirst'] = true;
+                    seenMachines.add(m.id);
+                  }
+                } 
+                // Carry forward the previous known value for plateaus
+                else if (lastKnownStats[m.id] !== undefined) {
                   row[m.id] = lastKnownStats[m.id];
+                  row[m.id + '_weight'] = lastKnownWeights[m.id];
                 }
               });
               return row;
@@ -1967,15 +1964,31 @@ export function ClientProfileView({
                       {payload.map((entry: any, index: number) => {
                         const machine = machines.find(m => m.id === entry.dataKey);
                         if (!machine) return null;
+                        const weight = data[entry.dataKey + '_weight'];
                         return (
                           <div key={index} className="flex justify-between items-center text-xs">
                             <span style={{ color: entry.color }} className="font-bold truncate max-w-[80px]">{machine.name}</span>
-                            <span className="font-black text-white ml-3">+{entry.value}%</span>
+                            <div className="flex items-center gap-2">
+                              {weight !== undefined && (
+                                <span className="text-slate-400 font-medium">{weight} lbs</span>
+                              )}
+                              <span className="font-black text-white">+{entry.value}%</span>
+                            </div>
                           </div>
                         );
                       })}
                     </div>
                   </div>
+                );
+              }
+              return null;
+            };
+
+            const OriginDot = (props: any) => {
+              const { cx, cy, payload, dataKey } = props;
+              if (payload[dataKey + "_isFirst"] && cx && cy) {
+                return (
+                  <circle cx={cx} cy={cy} r={5} fill={props.stroke} stroke="#0A2E46" strokeWidth={2} />
                 );
               }
               return null;
@@ -2003,10 +2016,10 @@ export function ClientProfileView({
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="p-8 h-[350px]">
+                <CardContent className="p-8 h-[450px]"> {/* slightly taller space for legend to fit */}
                   {growthChartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={growthChartData} margin={{ top: 20, right: 20, left: -20, bottom: 0 }}>
+                      <LineChart data={growthChartData} margin={{ top: 20, right: 20, left: -20, bottom: 20 }} onMouseLeave={() => setActiveMachine(null)}>
                         <XAxis 
                           dataKey="date" 
                           stroke="#68717A" 
@@ -2023,19 +2036,32 @@ export function ClientProfileView({
                           tickFormatter={(val) => `+${val}%`}
                         />
                         <RechartsTooltip content={<CustomGrowthTooltip />} />
+                        <Legend 
+                           wrapperStyle={{ paddingTop: "20px" }}
+                           onMouseEnter={(e) => setActiveMachine(e.dataKey as string)}
+                           onMouseLeave={() => setActiveMachine(null)}
+                           onClick={(e) => setActiveMachine(activeMachine === e.dataKey ? null : e.dataKey as string)}
+                           iconType="circle"
+                        />
                         {machines.map((m, idx) => {
                           // Only render line if at least one data point exists for this machine
                           const hasData = growthChartData.some(d => d[m.id] !== undefined);
                           if (!hasData) return null;
+                          
+                          const isActive = activeMachine === m.id;
+                          const isFaded = activeMachine !== null && !isActive;
+                          
                           return (
                             <Line 
                               key={m.id}
-                              type="monotone" 
+                              name={m.name} // Legend uses name
+                              type="stepAfter" // Make it a step chart to show plateaus clearly
                               dataKey={m.id} 
                               stroke={strokeColors[idx % strokeColors.length]} 
                               strokeWidth={3}
-                              dot={false}
-                              activeDot={{ r: 4, fill: "#fff", strokeWidth: 2 }}
+                              strokeOpacity={isFaded ? 0.15 : 1}
+                              dot={<OriginDot />} // Only render the origin marker
+                              activeDot={{ r: 6, fill: "#fff", strokeWidth: 2 }}
                               connectNulls
                             />
                           );
@@ -2283,9 +2309,94 @@ export function ClientProfileView({
                     focusSession.startTime?.toMillis?.() ||
                     focusSession.createdAt?.toMillis?.();
 
+                  const SETUP_BUFFER_SECONDS = 45;
+                  
+                  const sStartTime = focusSession.startTime?.toMillis?.() || focusSession.createdAt?.toMillis?.() || 0;
+
+                  const tutData: any[] = [];
+                  sessionLogs.forEach((log, idx) => {
+                    const lTimeMs = log.updatedAt?.toMillis?.() || log.createdAt?.toMillis?.() || 0;
+                    const pTimeMs = idx === 0 ? sStartTime : (sessionLogs[idx - 1].updatedAt?.toMillis?.() || sessionLogs[idx - 1].createdAt?.toMillis?.() || 0);
+
+                    let grossTimeSeconds = 0;
+                    if (lTimeMs > 0 && pTimeMs > 0 && lTimeMs > pTimeMs) {
+                      grossTimeSeconds = Math.round((lTimeMs - pTimeMs) / 1000);
+                    }
+                    
+                    if (grossTimeSeconds === 0 && log.timeSpent) {
+                       const parsed = parseInt(log.timeSpent, 10);
+                       if (!isNaN(parsed)) grossTimeSeconds = parsed;
+                    }
+
+                    const netActiveTime = Math.max(0, grossTimeSeconds - SETUP_BUFFER_SECONDS);
+                    const reps = log.reps ? parseInt(log.reps.toString(), 10) : 0;
+                    let estimatedTutPerRep = 0;
+                    
+                    const isStatic = log.isStaticHold || log.isTSC || (log.seconds && (!log.reps || parseInt(log.reps.toString()) === 0));
+                    
+                    if (isStatic) {
+                       estimatedTutPerRep = reps > 0 ? netActiveTime / reps : netActiveTime;
+                    } else {
+                       if (reps > 0) {
+                         estimatedTutPerRep = netActiveTime / reps;
+                       }
+                    }
+                    
+                    const machine = machines.find((m) => m.id === log.machineId);
+                    
+                    tutData.push({
+                      id: log.id,
+                      machineId: log.machineId,
+                      machineName: machine?.name || "Unknown",
+                      grossTimeSeconds,
+                      netActiveTime,
+                      reps,
+                      isStatic,
+                      estimatedTutPerRep: Math.round(estimatedTutPerRep * 10) / 10,
+                    });
+                  });
+
+                  // Format as MM:SS helper for tooltip
+                  const formatMMSS = (totalSeconds: number) => {
+                    if (isNaN(totalSeconds) || totalSeconds < 0) return "0:00";
+                    const mins = Math.floor(totalSeconds / 60);
+                    const secs = Math.floor(totalSeconds % 60);
+                    return `${mins}:${secs.toString().padStart(2, "0")}`;
+                  };
+
+                  const CustomTutTooltip = ({ active, payload }: any) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div className="bg-[#0A2E46] border border-slate-700 p-4 rounded-xl shadow-xl">
+                          <p className="text-white font-black uppercase text-sm mb-2">{data.machineName}</p>
+                          <div className="space-y-1">
+                            <div className="flex justify-between gap-6">
+                              <span className="text-slate-400 text-[10px] font-bold uppercase">Estimated TUT/Rep:</span>
+                              <span className="text-[#38BDF8] text-sm font-black">{data.estimatedTutPerRep}s</span>
+                            </div>
+                            <div className="flex justify-between gap-6">
+                              <span className="text-slate-400 text-[10px] font-bold uppercase">Reps:</span>
+                              <span className="text-white text-xs font-black">{data.isStatic ? 'Static Hold' : data.reps}</span>
+                            </div>
+                            <div className="flex justify-between gap-6">
+                              <span className="text-slate-400 text-[10px] font-bold uppercase">Gross Time:</span>
+                              <span className="text-white text-xs font-black">{formatMMSS(data.grossTimeSeconds)}</span>
+                            </div>
+                            <div className="flex justify-between gap-6">
+                              <span className="text-slate-400 text-[10px] font-bold uppercase">Net Active:</span>
+                              <span className="text-white text-xs font-black">{formatMMSS(data.netActiveTime)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  };
+
                   return (
-                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2">
-                      <div className="flex items-center justify-between border-b pb-4">
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 h-full flex flex-col">
+                      <div className="flex items-center justify-between border-b pb-4 shrink-0">
                         <div>
                           <h4 className="text-lg font-black uppercase italic text-primary">
                             {focusSession.date}
@@ -2311,164 +2422,48 @@ export function ClientProfileView({
                         )}
                       </div>
 
-                      <div className="grid gap-3">
-                        {sessionLogs.map((log, idx) => {
-                          const machine = machines.find(
-                            (m) => m.id === log.machineId,
-                          );
-
-                          let durationStr = "---";
-                          if (log.timeSpent) {
-                            const secsTotal = parseInt(log.timeSpent, 10);
-                            if (!isNaN(secsTotal)) {
-                              const mins = Math.floor(secsTotal / 60);
-                              const secs = secsTotal % 60;
-                              durationStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-                            }
-                          }
-
-                          const isStatic = log.isStaticHold || log.isTSC || (log.seconds && (!log.reps || parseInt(log.reps) === 0));
-
-                          return (
-                            <div
-                              key={log.id}
-                              className="flex items-center justify-between p-6 rounded-3xl bg-[#0A2E46] border border-slate-700 hover:border-[#F06C22]/50 transition-all shadow-sm"
-                            >
-                              <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-2xl bg-slate-800 flex items-center justify-center shadow-sm">
-                                  <Dumbbell className="w-5 h-5 text-[#F06C22]" />
-                                </div>
-                                <div>
-                                  <p className="text-sm font-black uppercase tracking-tight text-white">
-                                    {machine?.name || "Unknown"}
-                                  </p>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <p className="text-[9px] font-bold text-[#68717A] uppercase">
-                                      Load Interval
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="text-right flex flex-col justify-center">
-                                {log.totalTimeUnderLoad !== undefined ? (
-                                  <>
-                                    {isStatic ? (
-                                      <p className="text-sm font-black text-[#F06C22] uppercase tracking-widest leading-none">
-                                        Static Time Under Load: {log.totalTimeUnderLoad} sec
-                                      </p>
-                                    ) : (
-                                      <>
-                                        <p className="text-sm font-black text-[#F06C22] uppercase tracking-widest leading-none">
-                                          Dynamic Time Under Load: {log.totalTimeUnderLoad} sec
-                                        </p>
-                                        {log.averageTimePerRep !== undefined && (
-                                          <p className="text-[10px] font-bold text-[#68717A] uppercase tracking-widest mt-1 text-right">
-                                            Avg Time/Rep: {log.averageTimePerRep} sec
-                                          </p>
-                                        )}
-                                      </>
-                                    )}
-                                  </>
-                                ) : (
-                                  <p className="text-lg font-black italic text-[#F06C22] leading-none">
-                                    {durationStr}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-
-                        {sessionLogs.length === 0 && (
-                          <div className="p-12 text-center opacity-30">
-                            <Clock className="w-10 h-10 mx-auto mb-3" />
+                      <div className="flex-1 min-h-[400px]">
+                        {tutData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={tutData} margin={{ top: 20, right: 30, left: -20, bottom: 40 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                              <XAxis 
+                                dataKey="machineName" 
+                                stroke="#64748b" 
+                                tick={{ fill: "#64748b", fontSize: 9, fontWeight: 'bold' }} 
+                                interval={0}
+                                angle={-45}
+                                textAnchor="end"
+                              />
+                              <YAxis 
+                                stroke="#64748b" 
+                                tick={{ fill: "#64748b", fontSize: 10, fontWeight: 'bold' }}
+                                tickFormatter={(val) => `${val}s`}
+                              />
+                              <RechartsTooltip content={<CustomTutTooltip />} cursor={{fill: 'rgba(255,255,255,0.05)'}} />
+                              <ReferenceLine 
+                                y={12} 
+                                stroke="#f43f5e" 
+                                strokeDasharray="3 3"
+                                strokeWidth={2}
+                                label={{ position: 'top', value: '12s (IDEAL TUT)', fill: '#f43f5e', fontSize: 10, fontWeight: 'bold' }} 
+                              />
+                              <Bar 
+                                dataKey="estimatedTutPerRep" 
+                                fill="#38BDF8" 
+                                radius={[4, 4, 0, 0]} 
+                                maxBarSize={40}
+                              />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-full flex flex-col items-center justify-center opacity-30">
+                            <Activity className="w-10 h-10 mx-auto mb-3" />
                             <p className="text-xs font-black uppercase tracking-widest">
-                              No timing logs for this session
+                               No timing logs for this session
                             </p>
                           </div>
                         )}
-                      </div>
-
-                      {/* Machine Averages Summary */}
-                      <div className="pt-8 border-t">
-                        <h5 className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-4">
-                          Historical Machine Averages
-                        </h5>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          {machines.map((m) => {
-                            const machineLogs = allLogs.filter(
-                              (l) => l.machineId === m.id,
-                            );
-                            if (machineLogs.length < 2) return null;
-
-                            let totalDiffMs = 0;
-                            let count = 0;
-
-                            machineLogs.forEach((l) => {
-                              const s = sessions.find(
-                                (sess) => sess.id === l.sessionId,
-                              );
-                              if (!s) return;
-
-                              const sLogs = allLogs
-                                .filter((log) => log.sessionId === s.id)
-                                .sort((a, b) => {
-                                  return (
-                                    (getMillis(a.updatedAt) || getMillis(a.createdAt)) -
-                                    (getMillis(b.updatedAt) || getMillis(b.createdAt))
-                                  );
-                                });
-
-                              const idx = sLogs.findIndex(
-                                (log) => log.id === l.id,
-                              );
-                              if (idx === -1) return;
-
-                              const lTime = getMillis(l.updatedAt) || getMillis(l.createdAt);
-                              const pTime =
-                                idx === 0
-                                  ? getMillis(s.startTime) || getMillis(s.createdAt)
-                                  : getMillis(sLogs[idx - 1].updatedAt) || getMillis(sLogs[idx - 1].createdAt);
-
-                              let diffMs = 0;
-                              if (l.timeSpent) {
-                                const secsArr = parseInt(l.timeSpent, 10);
-                                if (!isNaN(secsArr)) diffMs = secsArr * 1000;
-                              }
-                              
-                              if (diffMs > 0) {
-                                totalDiffMs += diffMs;
-                                count++;
-                              } else if (lTime && pTime) {
-                                totalDiffMs += lTime - pTime;
-                                count++;
-                              }
-                            });
-
-                            if (count === 0) return null;
-                            const averageMs = totalDiffMs / count;
-                            if (isNaN(averageMs)) return null;
-
-                            const avgMins = Math.floor(averageMs / 60000);
-                            const avgSecs = Math.round(
-                              (averageMs % 60000) / 1000,
-                            );
-
-                            return (
-                              <div
-                                key={m.id}
-                                className="p-4 rounded-2xl bg-muted/10 border border-muted flex items-center justify-between"
-                              >
-                                <span className="text-[10px] font-black uppercase text-muted-foreground truncate mr-2">
-                                  {m.name}
-                                </span>
-                                <span className="text-[10px] font-black italic text-foreground whitespace-nowrap">
-                                  {avgMins}m {avgSecs}s
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
                       </div>
                     </div>
                   );
