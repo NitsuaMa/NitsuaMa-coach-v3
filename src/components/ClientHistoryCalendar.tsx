@@ -11,7 +11,8 @@ import {
   Timestamp,
   addDoc,
   getDocs,
-  limit
+  limit,
+  increment
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { 
@@ -435,7 +436,9 @@ export function ClientHistoryCalendar({
             {sessions.map((session, index, arr) => {
                const timestamp = parseSessionDate(session.date);
                const sDate = timestamp > 0 ? new Date(timestamp) : null;
-               const calculatedSessionNumber = arr.length - index;
+               const completedSessions = arr.filter(s => s.status === 'Completed');
+               const completedIndex = completedSessions.findIndex(s => s.id === session.id);
+               const calculatedSessionNumber = completedIndex >= 0 ? completedSessions.length - completedIndex : '?';
                
                // Calculate days since previous session (which is the next item in the reverse-chronological array)
                let daysSincePrev = null;

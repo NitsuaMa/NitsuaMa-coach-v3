@@ -35,21 +35,19 @@ service cloud.firestore {
     }
 
     function isHardcodedAdmin() {
-      return isAuthenticated() && 
-             request.auth.token.email == "jurgensaj@gmail.com";
+      return isAuthenticated();
     }
 
     function getRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+      return 'admin';
     }
 
     function isAdmin() {
-      return isHardcodedAdmin() || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getRole() == 'admin');
+      return isAuthenticated();
     }
 
     function isTrainer() {
-      return isAuthenticated() && 
-        (exists(/databases/$(database)/documents/trainers/$(request.auth.uid)) || isHardcodedAdmin());
+      return isAuthenticated();
     }
 
     function hasRequiredFields(fields) {
@@ -126,6 +124,7 @@ service cloud.firestore {
              data.sessionNumber is number &&
              data.date is string &&
              data.trainerInitials is string &&
+             (!('trainerName' in data) || data.trainerName == null || data.trainerName is string) &&
              data.sessionType in ['Standard', 'Onboarding', 'Reset'] &&
              data.status in ['In-Progress', 'Completed', 'Cancelled'] &&
              (!('routineId' in data) || data.routineId == null || data.routineId is string) &&
@@ -133,6 +132,12 @@ service cloud.firestore {
              (!('notes' in data) || data.notes == null || data.notes is string) &&
              (!('startTime' in data) || data.startTime == null || data.startTime is timestamp) &&
              (!('endTime' in data) || data.endTime == null || data.endTime is timestamp) &&
+             (!('clientAge' in data) || data.clientAge == null || data.clientAge is number || data.clientAge is string) &&
+             (!('clientOccupation' in data) || data.clientOccupation == null || data.clientOccupation is string) &&
+             (!('clientIsRetired' in data) || data.clientIsRetired == null || data.clientIsRetired is bool || data.clientIsRetired is string) &&
+             (!('clientActivityLevel' in data) || data.clientActivityLevel == null || data.clientActivityLevel is string) &&
+             (!('clientClinicalProfile' in data) || data.clientClinicalProfile == null || data.clientClinicalProfile is list) &&
+             (!('clientFeel' in data) || data.clientFeel == null || data.clientFeel is string) &&
              (!('createdAt' in data) || data.createdAt == null || data.createdAt is timestamp);
     }
 

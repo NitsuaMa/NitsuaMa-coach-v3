@@ -24,6 +24,8 @@ export function CreateClientModal({ clients, initialName = '', onClose, onClient
   const [lastName, setLastName] = useState(nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [gender, setGender] = useState<string>('');
+  const [age, setAge] = useState<string>('');
   const [discoveryNotes, setDiscoveryNotes] = useState('');
   
   const [activeTab, setActiveTab] = useState<'prospect' | 'existing'>('prospect');
@@ -50,21 +52,29 @@ export function CreateClientModal({ clients, initialName = '', onClose, onClient
     setIsSubmitting(true);
     
     try {
-      const clientData = {
+      const clientData: any = {
         firstName,
         lastName,
-        phone,
-        email,
-        discoveryNotes, // Stage 1 Notes
+        phone: phone || null,
+        email: email || null,
+        discoveryNotes: discoveryNotes || null, // Stage 1 Notes
         isActive: true,
         completedSessions: 0,
         sessionCount: 0,
         remainingSessions: activeTab === 'prospect' ? 1 : 10,
-        gender: "Male" as "Male", // Default, to be updated in Stage 2
+        gender: gender || null,
+        age: age ? parseInt(age, 10) : null,
         height: "5'10\"", // Default, to be updated in Stage 2
         consultationCompleted: activeTab === 'existing',
         requiresConsultation: activeTab === 'prospect',
       };
+      
+      // Clean up properties that are undefined if any stuck around
+      Object.keys(clientData).forEach(key => {
+        if (clientData[key] === undefined) {
+          clientData[key] = null;
+        }
+      });
       
       const docRef = await addDoc(collection(db, 'clients'), {
         ...clientData,
@@ -192,6 +202,30 @@ export function CreateClientModal({ clients, initialName = '', onClose, onClient
                   value={email} onChange={e => setEmail(e.target.value)}
                   className="h-12 bg-slate-800 border-slate-700 text-white placeholder:text-slate-600 focus:border-[#F06C22] rounded-xl font-bold"
                   placeholder="name@email.com" type="email"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Gender (Optional)</Label>
+                <select
+                  value={gender} onChange={e => setGender(e.target.value)}
+                  className="w-full h-12 bg-slate-800 border border-slate-700 text-white focus:border-[#F06C22] focus:ring-0 rounded-xl font-bold px-3"
+                >
+                  <option value="">Select Gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Age (Optional)</Label>
+                <Input 
+                  value={age} onChange={e => setAge(e.target.value)}
+                  className="h-12 bg-slate-800 border-slate-700 text-white placeholder:text-slate-600 focus:border-[#F06C22] rounded-xl font-bold"
+                  placeholder="e.g. 40" type="number" min="0" max="120"
                 />
               </div>
             </div>

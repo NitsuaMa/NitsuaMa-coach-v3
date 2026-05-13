@@ -10,15 +10,6 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
-const MOCK_DATA = [
-  { session: 'S1', 'Sedentary': 100, 'Manual Labor': 140, 'Clinical': 110, milestone: 100 },
-  { session: 'S4', 'Sedentary': 105, 'Manual Labor': 142, 'Clinical': 112, milestone: 100 },
-  { session: 'S8', 'Sedentary': 112, 'Manual Labor': 145, 'Clinical': 118, milestone: 100 },
-  { session: 'S12', 'Sedentary': 122, 'Manual Labor': 146, 'Clinical': 125, milestone: 120 }, // Sedentary hits 20%
-  { session: 'S16', 'Sedentary': 128, 'Manual Labor': 150, 'Clinical': 135, milestone: 120 }, // Clinical hits 20%
-  { session: 'S20', 'Sedentary': 135, 'Manual Labor': 155, 'Clinical': 140, milestone: 120 },
-];
-
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
@@ -47,7 +38,11 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export function TimeToTrendChart({ data }: { data?: any[] }) {
-  const chartData = data && data.length > 0 ? data : MOCK_DATA;
+  if (!data || data.length === 0) {
+    return <div className="text-slate-400 text-xs text-center flex items-center justify-center h-full font-bold uppercase tracking-widest">No Data Available</div>;
+  }
+
+  const chartData = data;
 
   return (
     <ResponsiveContainer width="100%" height="100%">

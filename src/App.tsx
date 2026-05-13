@@ -86,7 +86,7 @@ import { Trainer, TrainerAvailability, Client, View, Machine, WorkoutSession, Ex
 import { OperationType, handleFirestoreError } from './lib/firestore-errors';
 // Removing duplicate cn import
 import { hashPin } from './lib/auth-utils';
-import { parseSessionDate, calculateExerciseVolume } from './lib/utils';
+import { parseSessionDate, calculateExerciseVolume, safeToDate, getMillis } from './lib/utils';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TrainerControlHubView } from './components/TrainerControlHubView';
 import { InsightsDashboardView } from './components/InsightsDashboardView';
@@ -185,6 +185,33 @@ const DEFAULT_MACHINES: Machine[] = [
   { id: "m-ext", anatomicalRegion: "Upper Crural (Thighs)", name: "LEG EXTENSION", targetMuscles: "Quadriceps Femoris", kinematicClassification: "Simple Push", order: 19, settingOptions: ["Gap", "Back Pad"], setupGap: "Gap 2", executionPosture: "Chest Up / Anterior Pelvic Tilt" },
   { id: "m-leg-curl", anatomicalRegion: "Upper Crural (Thighs)", name: "LEG CURL", targetMuscles: "Hamstrings, Gastrocnemius", kinematicClassification: "Simple Pull", order: 20, settingOptions: ["Gap", "Back Pad", "Ankle Pad"], setupGap: "Gap 2", executionPosture: "Chest Up / Anterior Pelvic Tilt", sequencingContraindications: ["Avoid back-to-back pulling exercises to prevent localized forearm/biceps fatigue limiting torso stimulation."] },
 ];
+
+const getMachineImageUrl = (machineId?: string): string => {
+  const map: Record<string, string> = {
+    "m-neck": "1534438327276-14e5300c3a48", // Using back/shoulder for neck
+    "m-overhead-press": "1581009146145-b5ef050c2e1e", // pressing
+    "m-lateral-raise": "1581009146145-b5ef050c2e1e", // shoulders
+    "m-pulldown": "1526506114805-4f329971bc30", // back/pull-up
+    "m-pullover": "1526506114805-4f329971bc30", // back
+    "m-compound-row": "1534438327276-14e5300c3a48", // rowing 
+    "m-simple-row": "1534438327276-14e5300c3a48", // rowing
+    "m-chest-press": "1574680096145-d05b474e2155", // chest press
+    "m-chest-fly": "1574680096145-d05b474e2155", // chest
+    "m-bicep": "1581009137042-c56a8411b229", // biceps
+    "m-tricep-ext": "1581009137042-c56a8411b229", // arms
+    "m-dip": "1574680096145-d05b474e2155", // chest/arms
+    "m-abs": "1517836357463-d25dfeac3438", // abs
+    "m-lumbar": "1584466977773-e35492d52dc7", // core/stretch
+    "m-torso-rotation": "1517836357463-d25dfeac3438", // abs
+    "m-hip-abd": "1599058917212-d750089bc07e", // lower body
+    "m-hip-add": "1599058917212-d750089bc07e", // lower body  
+    "m-leg-press": "1540497077202-7c8a3999166f", // leg press
+    "m-ext": "1540497077202-7c8a3999166f", // legs
+    "m-leg-curl": "1599058917212-d750089bc07e", // hamstrings
+  };
+  const unsplashId = (machineId && map[machineId]) ? map[machineId] : "1518611012118-696072aa579a";
+  return `https://images.unsplash.com/photo-${unsplashId}?auto=format&fit=crop&w=800&h=450&q=80`;
+};
 
 type RoutineType = 'A' | 'B' | 'Free';
 
@@ -367,7 +394,24 @@ export default function App() {
       };
       
       // Clean up internal height helper fields if any
-      const { heightFeet, heightInches, ...finalData } = submissionData as any;
+      const { heightFeet, heightInches, ...restFinalData } = submissionData as any;
+
+      const finalData: any = { ...restFinalData };
+
+      // Ensure age is properly handled avoiding empty strings or NaNs
+      if (finalData.age === "" || finalData.age === undefined) {
+        finalData.age = null;
+      } else if (typeof finalData.age === 'string') {
+        const parsed = parseInt(finalData.age, 10);
+        finalData.age = isNaN(parsed) ? null : parsed;
+      }
+
+      // Convert any remaining undefined to null, empty string optionally to null if optional field
+      Object.keys(finalData).forEach(key => {
+        if (finalData[key] === undefined) {
+          finalData[key] = null;
+        }
+      });
 
       if (editingClient) {
         await updateDoc(doc(db, 'clients', editingClient.id!), {
@@ -756,7 +800,7 @@ export default function App() {
         const deletePromises = snap.docs
           .filter(docRef => {
             const data = docRef.data();
-            const created = data.createdAt?.toDate() || new Date(data.date);
+            const created = safeToDate(data.createdAt) || new Date(data.date);
             return created < today;
           })
           .map(async (docRef) => {
@@ -1601,10 +1645,10 @@ export default function App() {
                         ) : (
                            // Unsplash default photo mechanism for robust mockups
                            <img 
-                             src={infoMachine.id === 'm-leg-press' ? 'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?auto=format&fit=crop&w=800&q=80' : `https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=800&q=80`} 
+                             src={getMachineImageUrl(infoMachine.id)} 
                              className="w-full h-full object-cover brightness-100 transition-all duration-500" 
                              onError={(e) => {
-                               (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=800&q=80';
+                               (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?auto=format&fit=crop&w=800&q=80';
                              }}
                            />
                         )}
@@ -2035,10 +2079,11 @@ function TrainersView({
 
   const handlePickUpSession = async (session: any, trainer: Trainer) => {
     // Conflict check
-    const sessionTime = session.startTime.toDate();
+    const sessionTime = safeToDate(session.startTime);
+    if (!sessionTime) return;
     const hasConflict = schedules.some(s => 
       s.trainerName === trainer.fullName && 
-      s.startTime.toDate().getTime() === sessionTime.getTime() &&
+      getMillis(s.startTime) === sessionTime.getTime() &&
       s.id !== session.id
     );
 
@@ -2058,10 +2103,11 @@ function TrainersView({
     }
   };
 
-  const unassignedSessions = schedules.filter(s => 
-    (!s.trainerName || s.trainerName.toLowerCase().includes('select') || s.trainerName === '') &&
-    s.startTime.toDate() > new Date()
-  ).sort((a, b) => a.startTime.toDate().getTime() - b.startTime.toDate().getTime());
+  const unassignedSessions = schedules.filter(s => {
+    if ((s.trainerName && !s.trainerName.toLowerCase().includes('select') && s.trainerName !== '')) return false;
+    const date = safeToDate(s.startTime);
+    return date && date > new Date();
+  }).sort((a, b) => getMillis(a.startTime) - getMillis(b.startTime));
 
   return (
     <motion.div 
@@ -2191,7 +2237,7 @@ function TrainersView({
                       <div className="space-y-1">
                         <p className="text-sm font-black uppercase">{sc.clientName}</p>
                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                          {sc.startTime.toDate().toLocaleDateString([], { month: 'short', day: 'numeric' })} @ {sc.startTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {safeToDate(sc.startTime)?.toLocaleDateString([], { month: 'short', day: 'numeric' })} @ {safeToDate(sc.startTime)?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
                     </div>
@@ -2238,10 +2284,11 @@ function TrainersView({
             // Get sessions relative to now
             const now = new Date();
             const upcomingSchedule = schedules.filter(s => {
-              const sDate = s.startTime.toDate();
+              const sDate = safeToDate(s.startTime);
+              if (!sDate) return false;
               return (s.trainerId === trainer.id || s.trainerName.toLowerCase().includes(trainer.fullName.toLowerCase())) && 
                      sDate >= now && s.status !== 'Cancelled';
-            }).sort((a, b) => a.startTime.toDate().getTime() - b.startTime.toDate().getTime());
+            }).sort((a, b) => getMillis(a.startTime) - getMillis(b.startTime));
 
             const isSelected = selectedTrainerId === trainer.id;
 
@@ -2299,12 +2346,12 @@ function TrainersView({
                                     <div className="min-w-0">
                                       <p className="text-xs font-black uppercase truncate">{s.clientName}</p>
                                       <p className="text-[9px] text-muted-foreground font-bold">
-                                        {s.startTime.toDate().toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+                                        {safeToDate(s.startTime)?.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
                                       </p>
                                     </div>
                                     <div className="text-right">
                                       <p className="text-[10px] font-black">
-                                        {s.startTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        {safeToDate(s.startTime)?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                       </p>
                                     </div>
                                   </div>
@@ -2694,10 +2741,11 @@ function ClientsView({
 
   const todaysSchedules = schedules
     .filter(s => {
-      const date = s.startTime.toDate();
+      const date = safeToDate(s.startTime);
+      if (!date) return false;
       return date >= dateStart && date <= dateEnd && s.status !== 'Cancelled';
     })
-    .sort((a, b) => a.startTime.toDate().getTime() - b.startTime.toDate().getTime());
+    .sort((a, b) => getMillis(a.startTime) - getMillis(b.startTime));
 
   // Generate 6 days starting from today or Monday (skipping Sundays)
   const getUpcomingDays = () => {
@@ -2783,7 +2831,8 @@ function ClientsView({
   // Find if a slot has any sessions for any trainer
   const getSlotSessions = (slot: string) => {
     return todaysSchedules.filter(s => {
-      const date = s.startTime.toDate();
+      const date = safeToDate(s.startTime);
+      if (!date) return false;
       const h = date.getHours().toString().padStart(2, '0');
       const m = date.getMinutes().toString().padStart(2, '0');
       return `${h}:${m}` === slot;
@@ -2810,8 +2859,8 @@ function ClientsView({
   // Recent clients (edited or created)
   const recentClients = [...clients]
     .sort((a, b) => {
-      const timeA = (a as any).updatedAt?.toDate()?.getTime() || a.createdAt?.toDate()?.getTime() || 0;
-      const timeB = (b as any).updatedAt?.toDate()?.getTime() || b.createdAt?.toDate()?.getTime() || 0;
+      const timeA = getMillis((a as any).updatedAt) || getMillis(a.createdAt) || 0;
+      const timeB = getMillis((b as any).updatedAt) || getMillis(b.createdAt) || 0;
       return timeB - timeA;
     })
     .slice(0, 5);
@@ -2819,8 +2868,11 @@ function ClientsView({
   const getClientSessions = (client: Client) => {
     const clientName = `${client.firstName} ${client.lastName}`;
     const next = schedules
-      .filter(s => (s.clientId === client.id || s.clientName.toLowerCase() === clientName.toLowerCase()) && s.startTime.toDate() > now && s.status !== 'Cancelled')
-      .sort((a, b) => a.startTime.toDate().getTime() - b.startTime.toDate().getTime())[0];
+      .filter(s => {
+        const d = safeToDate(s.startTime);
+        return (s.clientId === client.id || s.clientName.toLowerCase() === clientName.toLowerCase()) && d && d > now && s.status !== 'Cancelled';
+      })
+      .sort((a, b) => getMillis(a.startTime) - getMillis(b.startTime))[0];
     const last = sessions
       .filter(s => s.clientId === client.id)
       .sort((a, b) => parseSessionDate(b.date) - parseSessionDate(a.date))[0];
@@ -3221,15 +3273,18 @@ function ClientsView({
                           </td>
                           {visibleTrainersList.map((trainer, tIdx) => {
                             const session = todaysSchedules.find(s => {
-                              const tStr = get12HourStr(s.startTime.toDate());
+                              const sDate = safeToDate(s.startTime);
+                              if (!sDate) return false;
+                              const tStr = get12HourStr(sDate);
                               return tStr === slot && s.trainerName === trainer.fullName && s.status !== 'Cancelled';
                             });
 
                             const color = TRAINER_COLORS[tIdx % TRAINER_COLORS.length];
-                            const isCompleted = session && (session.status === 'Completed' || session.startTime.toDate() < now);
+                            const isCompleted = session && (session.status === 'Completed' || getMillis(session.startTime) < now.getTime());
                             const clientObj = session ? findClientForSession(session) : null;
                             const workoutSession = clientObj ? sessions.find(s => s.clientId === clientObj.id && new Date(s.createdAt?.toDate?.() || s.date).toDateString() === new Date().toDateString()) : null;
-                            const sessionNumber = workoutSession ? workoutSession.sessionNumber : (clientObj ? (clientObj.sessionCount || 0) + 1 : 1);
+                            const isAlreadyCompleted = workoutSession?.status === "Completed";
+                            const sessionNumber = clientObj ? (clientObj.sessionCount || 0) + (isAlreadyCompleted ? 0 : 1) : 1;
                             const hasAlert = clientObj && (
                               (clientObj.clinicalProfile && clientObj.clinicalProfile.length > 0) ||
                               !!clientObj.clinicalNotes ||
@@ -3397,7 +3452,7 @@ function ClientsView({
                             {next ? (
                               <div className="space-y-1">
                                 <p className="text-sm font-black text-primary">
-                                  {next.startTime.toDate().toLocaleDateString([], { month: 'short', day: 'numeric' })} @ {next.startTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  {safeToDate(next.startTime)?.toLocaleDateString([], { month: 'short', day: 'numeric' })} @ {safeToDate(next.startTime)?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </p>
                                 <p className="text-[10px] font-black text-primary/70 uppercase italic">TR: {next.trainerName}</p>
                               </div>
@@ -4483,16 +4538,11 @@ function MachinesView({ machines, clients, onOpenInfo }: { machines: Machine[], 
       </div>
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-        {machines.map((machine) => {
+        {machines.map((machine, index) => {
           const stats = calculateStats(machine.id!);
           // Using deterministically selected robust Unsplash images for fitness equipment 
           // If the machine is the Leg Press, explicitly provide a robust Leg Press URL (or fallback)
-          const fallbackImgUrl = machine.id === 'm-leg-press' 
-            ? 'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?auto=format&fit=crop&w=400&q=80' // Better default image
-            : `https://images.unsplash.com/photo-${[
-                "1534438327276-14e5300c3a48", "1540497077202-7c8a3999166f", "1574680096145-d05b474e2155",
-                "1518611012118-696072aa579a", "1581009146145-b5ef050c2e1e", "1584466977773-e625c37cdd50"
-              ][(machine.order || 0) % 6]}?auto=format&fit=crop&w=400&q=80`;
+          const fallbackImgUrl = getMachineImageUrl(machine.id);
 
           return (
             <Card key={machine.id} className="group rounded-2xl overflow-hidden border border-border/80 hover:border-primary/50 transition-all shadow-sm bg-card flex flex-col">
@@ -4638,7 +4688,7 @@ function ExerciseHistoryDialog({
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-black text-muted-foreground uppercase">
-                          {log.createdAt?.toDate ? log.createdAt.toDate().toLocaleDateString() : 'Recent'}
+                          {safeToDate(log.createdAt)?.toLocaleDateString() || 'Recent'}
                         </span>
                         {isOrigin && (
                           <Badge className="bg-primary text-white text-[8px] font-black rounded px-1.5 h-4 border-none uppercase">Origin</Badge>
@@ -4797,7 +4847,7 @@ function SessionNotesSidebar({
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Active Trainer</span>
                     </div>
                     <span className="text-[9px] font-bold text-slate-600">
-                      {note.createdAt?.toDate?.() ? note.createdAt.toDate().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Now'}
+                      {safeToDate(note.createdAt)?.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) || 'Now'}
                     </span>
                   </div>
                   <p className="text-sm font-medium leading-relaxed text-slate-300 whitespace-pre-wrap">
@@ -5276,10 +5326,7 @@ function WorkoutTrackerView({
 
   const startNewSession = async (routineType: 'A' | 'B' | 'Free', sessionType: SessionType = 'Standard', customMachines?: string[], adjustmentNote?: string, permanentSave?: boolean) => {
     if (!clientId) return;
-    const nextNum = Math.max(
-      sessions.length > 0 ? Math.max(...sessions.map(s => s.sessionNumber)) : 0,
-      selectedClient?.sessionCount || 0
-    ) + 1;
+    const nextNum = (selectedClient?.sessionCount || 0) + 1;
     
     // Auto-populate trainer and date
     const trainerInitials = authTrainer?.initials || trainers[0]?.initials || '??';
@@ -5333,13 +5380,25 @@ function WorkoutTrackerView({
         createdAt: serverTimestamp()
       });
 
-      if (adjustmentNote) {
+      const clientUpdateData: any = {};
+      if (routineType === 'B' && !selectedClient?.isRoutineBActive) {
+        clientUpdateData.isRoutineBActive = true;
+      }
+      if (nextNum === 1 && !selectedClient?.firstSessionDate) {
+        clientUpdateData.firstSessionDate = serverTimestamp();
+      }
+      if (Object.keys(clientUpdateData).length > 0) {
+        await updateDoc(doc(db, 'clients', clientId), clientUpdateData).catch(console.error);
+      }
+
+      if (adjustmentNote && authTrainer) {
         await addDoc(collection(db, 'sessionNotes'), {
           sessionId: docRef.id,
           clientId,
-          trainerId: authTrainer?.id || '',
+          trainerId: authTrainer.id || '',
+          trainerInitials: authTrainer.initials || authTrainer.fullName.substring(0, 2).toUpperCase(),
           date: new Date().toLocaleDateString(),
-          note: `[Protocol Adjustment]: ${adjustmentNote}`,
+          content: `[Protocol Adjustment]: ${adjustmentNote}`,
           createdAt: serverTimestamp()
         });
       }

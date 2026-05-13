@@ -38,6 +38,9 @@ import {
   History,
   Maximize,
   Maximize2,
+  Battery,
+  CalendarDays,
+  Clock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
@@ -156,18 +159,27 @@ export function ClientProfileView({
   const [sessionLimit, setSessionLimit] = useState(10);
   const [calculatedSessionCount, setCalculatedSessionCount] = useState<number>(0);
 
+  const client = clients.find((c) => c.id === clientId);
+
   useEffect(() => {
     if (!clientId) return;
     const fetchSessionCount = async () => {
       try {
         const snapshot = await getCountFromServer(query(collection(db, "sessions"), where("clientId", "==", clientId), where("status", "==", "Completed")));
-        setCalculatedSessionCount(snapshot.data().count);
+        const actualCount = snapshot.data().count;
+        setCalculatedSessionCount(actualCount);
+        
+        // Ensure client document stays perfectly in sync with actual history length
+        if (client && (client.sessionCount !== actualCount)) {
+          // Fire and forget update
+          updateDoc(doc(db, "clients", clientId), { sessionCount: actualCount }).catch(console.error);
+        }
       } catch (err) {
         console.error("Error fetching session count", err);
       }
     };
     fetchSessionCount();
-  }, [clientId, sessions]); // re-fetch when sessions state changes
+  }, [clientId, sessions, client?.sessionCount]); // re-fetch when sessions state changes
 
   useEffect(() => {
     const handleOpenImport = () => setView("chart-importer" as any);
@@ -202,8 +214,6 @@ export function ClientProfileView({
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [matrixRoutineFilter, setMatrixRoutineFilter] = useState<string>("all");
   const SESSIONS_PER_PAGE = 3;
-
-  const client = clients.find((c) => c.id === clientId);
 
   const handleUpdateMachineSettings = async () => {
     if (!editingSettings || !clientId) return;
@@ -472,11 +482,17 @@ export function ClientProfileView({
     }
 
     // Optimized session fetching with limit
+    const queries = [];
+    if (activeTab === "overview") {
+      queries.push(limit(sessionLimit));
+    }
+    
+    // Fallback if client has first session date we pull that far back, otherwise it just pulls all (unlimited if not overview)
     const sessionsQuery = query(
       collection(db, "sessions"),
       where("clientId", "==", clientId),
       orderBy("date", "desc"),
-      limit(sessionLimit)
+      ...queries
     );
 
     const unsubSessions = onSnapshot(sessionsQuery, async (sessionSnap) => {
@@ -1122,10 +1138,11 @@ export function ClientProfileView({
                     .slice(0, 6)
                     .reverse()
                     .map((s, sIdx) => {
-                      const totalSessions = sessions.length;
                       const displaySessions = sessions.slice(0, 6).reverse();
-                      // We need to calculate the actual session number based on its position in the full sessions array
-                      const sNum = s.sessionNumber || (totalSessions - (displaySessions.length - 1 - sIdx));
+                      const globalIndexIdx = sessions.findIndex(sess => sess.id === s.id);
+                      // Calculate purely based on history length to fix inconsistencies from deleted/imported logs
+                      const totalRecords = Math.max(calculatedSessionCount, sessions.length);
+                      const sNum = totalRecords - globalIndexIdx;
                       
                       return (
                         <th
@@ -1658,6 +1675,115 @@ export function ClientProfileView({
         </TabsContent>
 
         <TabsContent value="statistics" className="space-y-6">
+          {/* Consistency & Training Frequency Insights */}
+          {(() => {
+            const completedSessions = sessions.filter(s => s.status === 'Completed').sort((a,b) => parseSessionDate(a.date) - parseSessionDate(b.date));
+            if (completedSessions.length === 0) return null;
+
+            const firstDate = client.firstSessionDate 
+              ? new Date(client.firstSessionDate?.toDate?.() || client.firstSessionDate)
+              : new Date(parseSessionDate(completedSessions[0].date));
+            
+            let totalRestDays = 0;
+            let restIntervals = 0;
+            for (let i = 1; i < completedSessions.length; i++) {
+              const prev = parseSessionDate(completedSessions[i - 1].date);
+              const curr = parseSessionDate(completedSessions[i].date);
+              const diffDays = Math.floor((curr - prev) / (1000 * 60 * 60 * 24));
+              if (diffDays > 0) {
+                totalRestDays += diffDays;
+                restIntervals++;
+              }
+            }
+            const avgRestDays = restIntervals > 0 ? (totalRestDays / restIntervals).toFixed(1) : 'N/A';
+
+            const timeRanges = { Morning: 0, Afternoon: 0, Evening: 0 };
+            completedSessions.forEach(s => {
+              let hour = 12;
+              if (s.startTime?.toDate) {
+                hour = s.startTime.toDate().getHours();
+              } else if (s.createdAt?.toDate) {
+                hour = s.createdAt.toDate().getHours();
+              }
+              if (hour < 12) timeRanges.Morning++;
+              else if (hour < 17) timeRanges.Afternoon++;
+              else timeRanges.Evening++;
+            });
+            const favoriteTime = Object.keys(timeRanges).reduce((a, b) => timeRanges[a as keyof typeof timeRanges] > timeRanges[b as keyof typeof timeRanges] ? a : b);
+
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            const sessionsPast30 = completedSessions.filter(s => parseSessionDate(s.date) >= thirtyDaysAgo.getTime()).length;
+            const past30Weeks = 30 / 7;
+            const avgPerWeek30 = (sessionsPast30 / past30Weeks).toFixed(1);
+
+            const lifetimeDays = Math.max(1, Math.floor((Date.now() - firstDate.getTime()) / (1000 * 60 * 60 * 24)));
+            const lifetimeWeeks = lifetimeDays / 7;
+            const avgPerWeekLife = (completedSessions.length / Math.max(1, lifetimeWeeks)).toFixed(1);
+
+            return (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card className="rounded-[32px] overflow-hidden border-2 shadow-sm bg-gradient-to-br from-card to-card hover:border-primary/30 transition-all group">
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <CalendarDays className="w-4 h-4 text-primary" />
+                      </div>
+                      <p className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">Origin</p>
+                    </div>
+                    <div className="text-2xl font-black italic tracking-tighter text-foreground">{firstDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+                    <p className="text-[10px] font-bold text-muted-foreground mt-1 opacity-60">First Recorded App Session</p>
+                  </CardContent>
+                </Card>
+                
+                <Card className="rounded-[32px] overflow-hidden border-2 shadow-sm bg-gradient-to-br from-card to-card hover:border-emerald-500/30 transition-all group">
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <TrendingUp className="w-4 h-4 text-emerald-500" />
+                      </div>
+                      <p className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">Frequency</p>
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <div className="text-3xl font-black italic tracking-tighter text-foreground">{avgPerWeek30}</div>
+                      <span className="text-xs font-bold uppercase mb-1.5 opacity-60">per week (30 Days)</span>
+                    </div>
+                    <p className="text-[10px] font-bold text-emerald-600 mt-1 uppercase tracking-widest leading-none bg-emerald-500/10 w-fit px-2 py-1 rounded">Lifetime: {avgPerWeekLife} / wk</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-[32px] overflow-hidden border-2 shadow-sm bg-gradient-to-br from-card to-card hover:border-amber-500/30 transition-all group">
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Battery className="w-4 h-4 text-amber-500" />
+                      </div>
+                      <p className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">Recovery Avg</p>
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <div className="text-3xl font-black italic tracking-tighter text-foreground">{avgRestDays}</div>
+                      <span className="text-xs font-bold uppercase mb-1.5 opacity-60">days</span>
+                    </div>
+                    <p className="text-[10px] font-bold text-amber-600 mt-1 uppercase tracking-widest leading-none bg-amber-500/10 w-fit px-2 py-1 rounded">Between sessions</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-[32px] overflow-hidden border-2 shadow-sm bg-gradient-to-br from-card to-card hover:border-indigo-500/30 transition-all group">
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-indigo-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Clock className="w-4 h-4 text-indigo-500" />
+                      </div>
+                      <p className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">Preferred Time</p>
+                    </div>
+                    <div className="text-2xl font-black italic tracking-tighter text-foreground">{favoriteTime}</div>
+                    <p className="text-[10px] font-bold text-indigo-600 mt-1 uppercase tracking-widest leading-none bg-indigo-500/10 w-fit px-2 py-1 rounded">Routine Dominance</p>
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          })()}
+
           {/* 60-Day Overall Growth Chart */}
           {(() => {
             const sixtyDaysAgo = new Date();

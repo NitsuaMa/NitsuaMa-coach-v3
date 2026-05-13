@@ -342,7 +342,18 @@ export function WorkoutChartGrid({
 
               {/* Session Column Headers */}
               {sessions.map((session, idx) => {
-                const sessionNum = session.sessionNumber || (idx + 1);
+                const clientObj = clients.find(c => c.id === clientId);
+                const totalRecords = Math.max(clientObj?.sessionCount || 0, sessions.length);
+                const globalIndexIdx = sessions.findIndex(sess => sess.id === session.id);
+                // sessions are rendered left-to-right from oldest to newest (of the visible batch).
+                // Example: total 40, showing 30. The newest session is at idx=29.
+                // However, since it is rendered reverse, wait: WorkoutChartGrid reverses sessions.
+                // "grid view: left -> right: oldest -> newest"
+                // Newest is at index 29 (rightmost).
+                // Its original index in the decreasingly sorted array would be 0!
+                // Let's just use: (totalRecords - sessions.length) + idx + 1
+                // For showing 30, idx 29 -> 40 - 30 + 29 + 1 = 40.
+                const sessionNum = (totalRecords - sessions.length) + idx + 1;
                 return (
                   <th 
                     key={session.id || idx} 

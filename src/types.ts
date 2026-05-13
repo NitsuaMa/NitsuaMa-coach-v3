@@ -62,7 +62,7 @@ export interface Client {
   mindbodyId?: string;
   firstName: string;
   lastName: string;
-  gender: 'Male' | 'Female' | 'Other';
+  gender?: 'Male' | 'Female' | 'Other' | string;
   height: string; // e.g., "5'10\""
   weight?: string;
   age?: number;
@@ -97,6 +97,7 @@ export interface Client {
   packageTier?: "6-Month" | "12-Month" | "18-Month" | "None";
   consultationCompleted?: boolean;
   requiresConsultation?: boolean;
+  firstSessionDate?: any;
   discoveryNotes?: string;
   currentMachineMetrics?: Record<string, CurrentMachineMetric>;
   createdAt?: any;

@@ -72,51 +72,6 @@ const GAP_OPTIONS = [
   { label: 'All Gaps (Mixed Data)', value: 'all' },
 ];
 
-const generateMockLeaderboard = (machineId: string): LeaderboardEntry[] => {
-  const entries: LeaderboardEntry[] = [];
-  const firstNames = ['James', 'Mary', 'Robert', 'Patricia', 'John', 'Jennifer', 'Michael', 'Linda', 'William', 'Elizabeth', 'David', 'Barbara', 'Richard', 'Susan', 'Joseph', 'Jessica', 'Thomas', 'Sarah', 'Charles', 'Karen', 'Christopher', 'Nancy', 'Daniel', 'Lisa', 'Matthew', 'Betty', 'Anthony', 'Margaret', 'Mark', 'Sandra'];
-  const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin'];
-
-  const machine = MACHINE_DATABASE[machineId] || { baseMale: 100, baseFemale: 60 };
-
-  for (let i = 0; i < 60; i++) {
-    const fName = firstNames[Math.floor(Math.random() * firstNames.length)];
-    const lName = lastNames[Math.floor(Math.random() * lastNames.length)];
-    const age = Math.floor(Math.random() * 50) + 25;
-    const gender = Math.random() > 0.5 ? 'M' : 'F' as 'M' | 'F' | 'O';
-    
-    // Weight calculation based on gender and age (with randomness)
-    const base = gender === 'M' ? machine.baseMale : machine.baseFemale;
-    const experienceMultiplier = Math.random() * 2 + 1; // 1x to 3x base
-    const ageFactor = age > 60 ? 0.8 : 1.0;
-    const rawWeight = Math.round(base * experienceMultiplier * ageFactor);
-    
-    // The "Gap" impact: Higher gap = higher weight
-    const gap = Math.floor(Math.random() * 4); // 0 to 3
-    const gapMultiplier = 1 + (gap * 0.15); // Each gap adds 15% strength potential
-    const finalWeight = Math.round(rawWeight * gapMultiplier);
-    
-    const occupation = OCCUPATIONS[Math.floor(Math.random() * OCCUPATIONS.length)];
-    
-    entries.push({
-      id: `client-${i}`,
-      name: `${fName} ${lName[0]}.`,
-      weight: finalWeight,
-      reps: Math.floor(Math.random() * 7) + 4, // 4-10 reps
-      gap,
-      setup: `S:${Math.floor(Math.random() * 8) + 1}`,
-      occupation: occupation.title,
-      occupationCategory: occupation.category,
-      age,
-      gender,
-      timeUnderLoad: Math.floor(Math.random() * 40) + 80, // 80-120 seconds
-      date: new Date(Date.now() - Math.random() * 1000 * 60 * 60 * 24 * 30).toISOString(),
-    });
-  }
-
-  return entries;
-};
-
 // --- Sub-component: Chart ---
 const LeaderboardChart = ({ data, activeClientId }: { data: LeaderboardEntry[], activeClientId?: string }) => {
   const chartRef = useRef<SVGSVGElement>(null);
@@ -249,9 +204,9 @@ export function MachineLeaderboardDashboard({ onBack }: { onBack?: () => void })
 
   const [allEntries, setAllEntries] = useState<LeaderboardEntry[]>([]);
   
-  // Initialize mock data
   useEffect(() => {
-    setAllEntries(generateMockLeaderboard(selectedMachine));
+    // In a real implementation this would fetch leaderboard entries from the backend relative to the selected machine.
+    setAllEntries([]);
   }, [selectedMachine]);
 
   // Filtering Logic

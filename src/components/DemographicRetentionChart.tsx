@@ -10,12 +10,6 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
-const MOCK_DATA = [
-  { ageBracket: '18-35', 'Corporate & Tech': 12, 'Healthcare': 18, 'Manual Labor': 8 },
-  { ageBracket: '36-55', 'Corporate & Tech': 36, 'Healthcare': 42, 'Manual Labor': 24 },
-  { ageBracket: '56+', 'Corporate & Tech': 60, 'Healthcare': 48, 'Manual Labor': 32 },
-];
-
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
@@ -38,7 +32,11 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export function DemographicRetentionChart({ data }: { data?: any[] }) {
-  const chartData = data && data.length > 0 ? data : MOCK_DATA;
+  if (!data || data.length === 0) {
+    return <div className="text-slate-400 text-xs text-center flex items-center justify-center h-full font-bold uppercase tracking-widest">No Data Available</div>;
+  }
+
+  const chartData = data;
 
   return (
     <ResponsiveContainer width="100%" height="100%">

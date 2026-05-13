@@ -11,14 +11,6 @@ import {
   Cell
 } from 'recharts';
 
-const MOCK_DATA = [
-  { machine: 'Lumbar Ext', 'Sedentary Desk': 45, 'Manual Labor': 15 },
-  { machine: 'Leg Press', 'Sedentary Desk': 35, 'Manual Labor': 25 },
-  { machine: 'Comp Row', 'Sedentary Desk': 50, 'Manual Labor': 20 },
-  { machine: 'Chest Press', 'Sedentary Desk': 25, 'Manual Labor': 10 },
-  { machine: 'Hip Abd', 'Sedentary Desk': 30, 'Manual Labor': 18 },
-];
-
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
@@ -41,7 +33,11 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export function MachineEfficacyChart({ data }: { data?: any[] }) {
-  const chartData = data && data.length > 0 ? data : MOCK_DATA;
+  if (!data || data.length === 0) {
+    return <div className="text-slate-400 text-xs text-center flex items-center justify-center h-full font-bold uppercase tracking-widest">No Data Available</div>;
+  }
+
+  const chartData = data;
 
   return (
     <ResponsiveContainer width="100%" height="100%">

@@ -12,7 +12,7 @@ import { Client, Machine, ExerciseLog, Routine, WorkoutSession, TrainerFocus, Se
 import { HistoricalMachinePerformance } from '../lib/historical-utils';
 
 import { calculateStartingWeight } from '../lib/consultation-utils';
-import { getMillis } from '../lib/utils';
+import { getMillis, safeToDate } from '../lib/utils';
 
 interface PreSessionOverviewProps {
   authTrainer: Trainer | null;
@@ -178,8 +178,8 @@ export function PreSessionOverview({
     ? routines.find(r => r.id === lastSession.routineId)?.name || ((lastSession.sessionType as string) === 'Free' ? 'Open Session' : lastSession.sessionType)
     : 'None';
   
-  const lastSessionDate = lastSession?.endTime?.toDate() 
-    ? new Date(lastSession.endTime.toDate()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const lastSessionDate = safeToDate(lastSession?.endTime)
+    ? safeToDate(lastSession.endTime)!.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : 'Never';
 
   const scheduledRoutineName = targetRoutine?.name || (routineA?.name || 'Routine A');
@@ -448,7 +448,7 @@ export function PreSessionOverview({
                       </p>
                       <div className="mt-3 flex items-center justify-between text-[8px] font-black uppercase tracking-widest text-slate-500">
                         <span>Assign: {focus.assignedBy}</span>
-                        <span>{focus.dateAssigned?.toDate ? new Date(focus.dateAssigned.toDate()).toLocaleDateString() : 'Active'}</span>
+                        <span>{safeToDate(focus.dateAssigned)?.toLocaleDateString() || 'Active'}</span>
                       </div>
                     </div>
                  ))
@@ -510,7 +510,7 @@ export function PreSessionOverview({
                    <div key={note.id || getMillis(note.createdAt)} className={`bg-slate-800/50 p-3.5 rounded-2xl border ${note.priority === 'High' ? 'border-l-4 border-l-amber-500 border-slate-700/50 shadow-sm' : 'border-slate-700/50'}`}>
                      <div className="flex justify-between items-start mb-2">
                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{note.trainerInitials || 'System'}</span>
-                       <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{note.createdAt?.toDate ? new Date(note.createdAt.toDate()).toLocaleDateString() : ''}</span>
+                       <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{safeToDate(note.createdAt)?.toLocaleDateString() || ''}</span>
                      </div>
                      <p className="text-[13px] text-white/90 leading-relaxed font-medium">{note.content}</p>
                    </div>

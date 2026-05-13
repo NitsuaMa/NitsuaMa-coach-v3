@@ -5,6 +5,32 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function getMillis(dateObj: any): number {
+  if (!dateObj) return 0;
+  if (typeof dateObj.toMillis === 'function') return dateObj.toMillis();
+  if (typeof dateObj.toDate === 'function') return dateObj.toDate().getTime();
+  if (typeof dateObj.getTime === 'function') return dateObj.getTime();
+  if (dateObj.seconds !== undefined) return dateObj.seconds * 1000 + ((dateObj.nanoseconds || 0) / 1000000);
+  try {
+    const parsed = new Date(dateObj).getTime();
+    return isNaN(parsed) ? 0 : parsed;
+  } catch(e) {
+    return 0;
+  }
+}
+
+export function safeToDate(d: any): Date | null {
+  if (!d) return null;
+  if (typeof d.toDate === 'function') return d.toDate();
+  if (typeof d === 'string' || typeof d === 'number') {
+    const newD = new Date(d);
+    return isNaN(newD.getTime()) ? null : newD;
+  }
+  if (d instanceof Date) return d;
+  if (d.seconds !== undefined) return new Date(d.seconds * 1000 + ((d.nanoseconds || 0) / 1000000));
+  return null;
+}
+
 /**
  * Robust date parser for legacy and standard formats to ensure chronological sorting
  * Handles YYYY-MM-DD, MM/DD/YYYY, MM/DD, and other common formats
@@ -48,22 +74,6 @@ export function parseSessionDate(dateString: string | undefined): number {
   // Fallback to standard JS parsing
   const parsed = Date.parse(dateString);
   return isNaN(parsed) ? 0 : parsed;
-}
-
-/**
- * Safely extract milliseconds from Firestore Timestamp, JS Date, or simple object
- */
-export function getMillis(dateObj: any): number {
-  if (!dateObj) return 0;
-  if (typeof dateObj.toMillis === 'function') return dateObj.toMillis();
-  if (typeof dateObj.getTime === 'function') return dateObj.getTime();
-  if (dateObj.seconds !== undefined) return dateObj.seconds * 1000 + ((dateObj.nanoseconds || 0) / 1000000);
-  try {
-    const parsed = new Date(dateObj).getTime();
-    return isNaN(parsed) ? 0 : parsed;
-  } catch(e) {
-    return 0;
-  }
 }
 
 /**
