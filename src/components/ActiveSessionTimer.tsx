@@ -1,12 +1,13 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 
 interface ActiveSessionTimerProps {
   startTime: any;
   paused?: boolean;
 }
 
-export function ActiveSessionTimer({ startTime, paused }: ActiveSessionTimerProps) {
+// 1. Isolate the Timer: Use React.memo so the parent doesn't re-render.
+export const ActiveSessionTimer = memo(function ActiveSessionTimer({ startTime, paused }: ActiveSessionTimerProps) {
   const [elapsed, setElapsed] = useState<number>(0);
   const [accumulatedPauseTime, setAccumulatedPauseTime] = useState<number>(0);
   const [pauseStart, setPauseStart] = useState<number | null>(null);
@@ -57,4 +58,4 @@ export function ActiveSessionTimer({ startTime, paused }: ActiveSessionTimerProp
       </span>
     </div>
   );
-}
+});

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   collection,
   onSnapshot,
@@ -65,6 +65,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ClientEquipmentPrescriptions } from "./ClientEquipmentPrescriptions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -157,6 +159,9 @@ export function ClientProfileView({
   const [historyPage, setHistoryPage] = useState(0);
   const [showFullChart, setShowFullChart] = useState(false);
   const [sessionLimit, setSessionLimit] = useState(10);
+  const [lastVisibleSession, setLastVisibleSession] = useState<any>(null);
+  const [hasMoreSessions, setHasMoreSessions] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [calculatedSessionCount, setCalculatedSessionCount] = useState<number>(0);
 
   const client = clients.find((c) => c.id === clientId);
@@ -470,6 +475,27 @@ export function ClientProfileView({
     return () => unsubRoutines();
   }, [clientId, hasQuotaError]);
 
+  const fetchLogsForSessions = async (sessionIds: string[]) => {
+    if (sessionIds.length === 0) return [];
+    const chunks = [];
+    for (let i = 0; i < sessionIds.length; i += 30) {
+      chunks.push(sessionIds.slice(i, i + 30));
+    }
+    let fetchedLogs: ExerciseLog[] = [];
+    for (const chunk of chunks) {
+      const qs = query(
+        collection(db, "exerciseLogs"),
+        where("sessionId", "in", chunk),
+      );
+      const snap = await getDocs(qs);
+      fetchedLogs = [
+        ...fetchedLogs,
+        ...snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as ExerciseLog),
+      ];
+    }
+    return fetchedLogs;
+  };
+
   useEffect(() => {
     if (!clientId || hasQuotaError) return;
 
@@ -481,63 +507,96 @@ export function ClientProfileView({
       return;
     }
 
-    // Optimized session fetching with limit
-    const queries = [];
-    if (activeTab === "overview") {
-      queries.push(limit(sessionLimit));
-    }
-    
-    // Fallback if client has first session date we pull that far back, otherwise it just pulls all (unlimited if not overview)
+    // 2. Firebase Query Limits & Pagination
+    // Always restrict the initial query to 10 to save massive memory/bandwidth.
     const sessionsQuery = query(
       collection(db, "sessions"),
       where("clientId", "==", clientId),
       orderBy("date", "desc"),
-      ...queries
+      limit(10) // STRICT LIMIT 10
     );
 
     const unsubSessions = onSnapshot(sessionsQuery, async (sessionSnap) => {
-      const sessionsData = sessionSnap.docs.map(
+      const docs = sessionSnap.docs;
+      
+      if (!docs.length) {
+        setSessions([]);
+        setAllLogs([]);
+        setHasMoreSessions(false);
+        return;
+      }
+
+      setLastVisibleSession(docs[docs.length - 1]);
+      setHasMoreSessions(docs.length === 10);
+
+      const liveSessionsData = docs.map(
         (doc) => ({ id: doc.id, ...doc.data() }) as WorkoutSession,
       );
-      sessionsData.sort(
-        (a, b) => parseSessionDate(b.date) - parseSessionDate(a.date),
-      );
-      setSessions(sessionsData);
 
-      if (sessionsData.length > 0) {
-        // Fetch logs only for the retrieved sessions
-        const sessionIds = sessionsData.map((s) => s.id!).filter(Boolean);
-        
-        // Use chunks of 30 for 'in' query limit optimization
-        const chunks = [];
-        for (let i = 0; i < sessionIds.length; i += 30) {
-          chunks.push(sessionIds.slice(i, i + 30));
-        }
+      // Merge gracefully to not erase older paginated history if coach loaded more
+      setSessions((prev) => {
+        const merged = new Map(prev.map(s => [s.id, s]));
+        liveSessionsData.forEach(s => merged.set(s.id, s));
+        const finalArr = Array.from(merged.values());
+        finalArr.sort((a, b) => parseSessionDate(b.date) - parseSessionDate(a.date));
+        return finalArr;
+      });
 
-        let allFetchedLogs: ExerciseLog[] = [];
-        for (const chunk of chunks) {
-          const qs = query(
-            collection(db, "exerciseLogs"),
-            where("sessionId", "in", chunk),
-          );
-          const snap = await getDocs(qs);
-          allFetchedLogs = [
-            ...allFetchedLogs,
-            ...snap.docs.map(
-              (doc) => ({ id: doc.id, ...doc.data() }) as ExerciseLog,
-            ),
-          ];
-        }
-        setAllLogs(allFetchedLogs);
-      } else {
-        setAllLogs([]);
-      }
+      const sessionIds = liveSessionsData.map(s => s.id!).filter(Boolean);
+      const newLogs = await fetchLogsForSessions(sessionIds);
+      
+      setAllLogs((prev) => {
+        const merged = new Map(prev.map(l => [l.id, l]));
+        newLogs.forEach(l => merged.set(l.id, l));
+        return Array.from(merged.values());
+      });
+
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, "sessions");
     });
 
     return () => unsubSessions();
-  }, [clientId, sessionLimit, activeTab, hasQuotaError]);
+  }, [clientId, activeTab, hasQuotaError]);
+
+  const handleLoadMoreHistory = async () => {
+    if (!lastVisibleSession || !hasMoreSessions || isLoadingMore || !clientId) return;
+    setIsLoadingMore(true);
+    try {
+      const moreQuery = query(
+        collection(db, "sessions"),
+        where("clientId", "==", clientId),
+        orderBy("date", "desc"),
+        startAfter(lastVisibleSession),
+        limit(10)
+      );
+      const snap = await getDocs(moreQuery);
+      if (snap.empty) {
+        setHasMoreSessions(false);
+        return;
+      }
+      
+      setLastVisibleSession(snap.docs[snap.docs.length - 1]);
+      setHasMoreSessions(snap.docs.length === 10);
+
+      const moreSessionsData = snap.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() }) as WorkoutSession,
+      );
+
+      const sessionIds = moreSessionsData.map(s => s.id!).filter(Boolean);
+      const moreLogs = await fetchLogsForSessions(sessionIds);
+
+      setSessions(prev => {
+        const out = [...prev, ...moreSessionsData].sort((a, b) => parseSessionDate(b.date) - parseSessionDate(a.date));
+        return Array.from(new Map(out.map(s => [s.id, s])).values()); 
+      });
+      setAllLogs(prev => [...prev, ...moreLogs]);
+      
+    } catch (err) {
+      console.error("Error loading older history", err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     if (!clientId) return;
@@ -719,6 +778,74 @@ export function ClientProfileView({
       machineIds: [...routine.machineIds],
     });
   };
+
+  // Task 3: Aggressive Memoization
+  const memoizedCompletedSessionsAsc = useMemo(() => {
+    return [...sessions]
+      .filter((s) => s.status === "Completed")
+      .sort((a, b) => parseSessionDate(a.date) - parseSessionDate(b.date));
+  }, [sessions]);
+
+  const memoizedCompletedSessionsDesc = useMemo(() => {
+    return [...memoizedCompletedSessionsAsc].reverse();
+  }, [memoizedCompletedSessionsAsc]);
+
+  const memoizedEfficiencySessions = useMemo(() => {
+    return memoizedCompletedSessionsAsc.filter((s) => s.startTime && s.endTime);
+  }, [memoizedCompletedSessionsAsc]);
+
+  const memoizedMachineStatsByDate = useMemo(() => {
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    const machineStatsByDate: Record<string, Record<string, number>> = {};
+    const machineBaselines: Record<string, number> = {};
+
+    [...allLogs]
+      .sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0))
+      .forEach((l) => {
+        if (!l.weight) return;
+        const w = parseInt(l.weight.toString() || "0");
+        if (w > 0) {
+          if (!machineBaselines[l.machineId]) {
+            machineBaselines[l.machineId] = w;
+          }
+          const session = sessions.find((s) => s.id === l.sessionId);
+          const time = l.createdAt?.toMillis?.() || 0;
+          if (session && session.date && time >= sixtyDaysAgo.getTime()) {
+            const dateStr = new Date(parseSessionDate(session.date)).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+            if (!machineStatsByDate[dateStr]) {
+              machineStatsByDate[dateStr] = {};
+            }
+            const base = machineBaselines[l.machineId];
+            machineStatsByDate[dateStr][l.machineId] = ((w - base) / base) * 100;
+          }
+        }
+      });
+    return { machineStatsByDate, machineBaselines };
+  }, [allLogs, sessions]);
+
+  const memoizedVolumeByDate = useMemo(() => {
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    const volumeByDate: Record<string, number> = {};
+
+    memoizedCompletedSessionsAsc.forEach((session) => {
+      const time = session.createdAt?.toMillis?.() || parseSessionDate(session.date);
+      if (time >= sixtyDaysAgo.getTime()) {
+        const sLogs = allLogs.filter((l) => l.sessionId === session.id);
+        const totalVol = sLogs.reduce((acc, log) => {
+          const w = parseInt(log.weight?.toString() || "0");
+          const r = parseInt(log.reps?.toString() || "0");
+          return acc + (w * r);
+        }, 0);
+        const dateStr = session.date ? new Date(parseSessionDate(session.date)).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+        if (dateStr) {
+          volumeByDate[dateStr] = (volumeByDate[dateStr] || 0) + totalVol;
+        }
+      }
+    });
+    return volumeByDate;
+  }, [memoizedCompletedSessionsAsc, allLogs]);
 
   if (!client)
     return (
@@ -1064,7 +1191,7 @@ export function ClientProfileView({
       </div>
 
       <Tabs
-        defaultValue="overview"
+        value={activeTab}
         className="w-full flex-1 flex flex-col min-h-0"
         onValueChange={setActiveTab}
       >
@@ -1075,6 +1202,12 @@ export function ClientProfileView({
               className="flex-1 min-w-[80px] rounded-full border border-slate-200 h-[26px] px-3 font-black uppercase text-[9px] tracking-widest text-[#68717A] bg-transparent data-[state=active]:border-transparent data-[state=active]:bg-[#115E8D] data-[state=active]:text-white transition-all data-[state=active]:shadow-sm"
             >
               Matrix
+            </TabsTrigger>
+            <TabsTrigger
+              value="equipment"
+              className="flex-1 min-w-[80px] rounded-full border border-slate-200 h-[26px] px-3 font-black uppercase text-[9px] tracking-widest text-[#68717A] bg-transparent data-[state=active]:border-transparent data-[state=active]:bg-[#115E8D] data-[state=active]:text-white transition-all data-[state=active]:shadow-sm"
+            >
+              Equipment
             </TabsTrigger>
             <TabsTrigger
               value="routines"
@@ -1088,32 +1221,24 @@ export function ClientProfileView({
             >
               Focus
             </TabsTrigger>
-            <TabsTrigger
-              value="history"
-              className="flex-1 min-w-[80px] rounded-full border border-slate-200 h-[26px] px-3 font-black uppercase text-[9px] tracking-widest text-[#68717A] bg-transparent data-[state=active]:border-transparent data-[state=active]:bg-[#115E8D] data-[state=active]:text-white transition-all data-[state=active]:shadow-sm"
-            >
-              History
-            </TabsTrigger>
-            <TabsTrigger
-              value="reports"
-              className="flex-1 min-w-[80px] rounded-full border border-slate-200 h-[26px] px-3 font-black uppercase text-[9px] tracking-widest text-[#68717A] bg-transparent data-[state=active]:border-transparent data-[state=active]:bg-[#115E8D] data-[state=active]:text-white transition-all data-[state=active]:shadow-sm"
-            >
-              Reports
-            </TabsTrigger>
-            <TabsTrigger
-              value="statistics"
-              className="flex-1 min-w-[80px] rounded-full border border-slate-200 h-[26px] px-3 font-black uppercase text-[9px] tracking-widest text-[#68717A] bg-transparent data-[state=active]:border-transparent data-[state=active]:bg-[#115E8D] data-[state=active]:text-white transition-all data-[state=active]:shadow-sm"
-            >
-              Statistics
-            </TabsTrigger>
-            <TabsTrigger
-              value="details"
-              className="flex-1 min-w-[80px] rounded-full border border-slate-200 h-[26px] px-3 font-black uppercase text-[9px] tracking-widest text-[#68717A] bg-transparent data-[state=active]:border-transparent data-[state=active]:bg-[#115E8D] data-[state=active]:text-white transition-all data-[state=active]:shadow-sm"
-            >
-              Details
-            </TabsTrigger>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex-1 min-w-[80px] rounded-full border border-slate-200 h-[26px] px-3 font-black uppercase text-[9px] tracking-widest text-[#68717A] bg-transparent hover:bg-slate-100 transition-all outline-none">
+                More...
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-48">
+                <DropdownMenuItem onClick={() => setActiveTab('details')} className="uppercase text-[10px] font-black tracking-widest cursor-pointer">Details</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActiveTab('history')} className="uppercase text-[10px] font-black tracking-widest cursor-pointer">History</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActiveTab('statistics')} className="uppercase text-[10px] font-black tracking-widest cursor-pointer">Statistics</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActiveTab('reports')} className="uppercase text-[10px] font-black tracking-widest cursor-pointer">Reports</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </TabsList>
         </div>
+
+        <TabsContent value="equipment">
+           <ClientEquipmentPrescriptions client={client} clientId={clientId} machines={machines} clientSettings={clientSettings} clientBodyWeight={parseInt(client?.weight || '150', 10)} />
+        </TabsContent>
 
         <TabsContent
           value="overview"
@@ -3031,7 +3156,7 @@ export function ClientProfileView({
             user={user}
             preloadedSessions={sessions}
             preloadedLogs={allLogs}
-            onLoadMoreHistory={() => setSessionLimit(prev => prev + 20)}
+            onLoadMoreHistory={handleLoadMoreHistory}
           />
         )}
       </AnimatePresence>

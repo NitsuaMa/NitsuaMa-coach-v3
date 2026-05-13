@@ -267,14 +267,13 @@ export function MachineKnowledgeDashboard({ setView }: { setView: (view: any) =>
                 <div className="relative aspect-video w-full overflow-hidden bg-slate-900 shrink-0">
                   <img 
                     src={
-                      machine.id === 'leg_press' ? '/regenerated_image_1777418510296.png' :
-                      machine.id === 'leg_extension' ? '/regenerated_image_1777418524469.png' :
-                      machine.id === 'chest_press' ? '/regenerated_image_1777418504308.png' : 
-                      machine.id === 'compound_row' ? '/regenerated_image_1777418531749.png' :
-                      `https://picsum.photos/seed/${machine.name.replace(/\s+/g, '-')}/400/250`
+                      machine.imageUrl || `https://picsum.photos/seed/${machine.name.replace(/\s+/g, '-')}/400/250`
                     } 
                     alt={machine.name}
                     className="w-full h-full object-cover brightness-105 transition-all duration-700 ease-out scale-100 group-hover:scale-110"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${machine.name.replace(/\s+/g, '-')}/400/250`;
+                    }}
                   />
                   <div className="absolute top-2 left-2 z-20">
                     <span className="text-[9px] font-black tracking-widest text-[#38BDF8] uppercase bg-[#0A2E46]/80 backdrop-blur-sm px-1.5 py-0.5 rounded shadow-sm border border-[#38BDF8]/20">

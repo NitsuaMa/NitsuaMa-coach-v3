@@ -19,6 +19,7 @@ export interface MachineKnowledge {
   clinicalWarnings?: string[];
   contraindicatedFor?: string[];
   biomechanicalNotes?: string;
+  imageUrl?: string;
 }
 
 export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
@@ -26,6 +27,7 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "leg_press": {
     id: "leg_press",
     name: "Leg Press",
+    imageUrl: "/regenerated_image_1777418501273.png?v=2",
     kinematicClassification: "Compound Push",
     executionPosture: "Chest Up / Anterior Pelvic Tilt",
     requiresHandoff: false,
@@ -141,6 +143,7 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "leg_extension": {
     id: "leg_extension",
     name: "Leg Extension",
+    imageUrl: "/regenerated_image_1777418524469.png?v=2",
     kinematicClassification: "Simple Push",
     executionPosture: "Chest Up / Anterior Pelvic Tilt",
     requiresHandoff: false,
@@ -317,6 +320,7 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "chest_press": {
     id: "chest_press",
     name: "Chest Press",
+    imageUrl: "/regenerated_image_1777418504308.png?v=2",
     kinematicClassification: "Compound Push",
     executionPosture: "Chest Up / Anterior Pelvic Tilt",
     requiresHandoff: false,
@@ -577,6 +581,7 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "compound_row": {
     id: "compound_row",
     name: "Compound Row",
+    imageUrl: "/regenerated_image_1777418531749.png?v=2",
     kinematicClassification: "Compound Pull",
     executionPosture: "Chest Up / Anterior Pelvic Tilt",
     requiresHandoff: true,

@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import { Play, Pause, RotateCcw, Timer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'motion/react';
 
-export function Stopwatch({ 
+// 1. Isolate the Timer: Use React.memo so the parent doesn't re-render on interval tick.
+export const Stopwatch = memo(function Stopwatch({ 
   initialValue = 0, 
   onLogTSC
 }: { 
@@ -101,4 +102,4 @@ export function Stopwatch({
       </motion.div>
     </div>
   );
-}
+});
