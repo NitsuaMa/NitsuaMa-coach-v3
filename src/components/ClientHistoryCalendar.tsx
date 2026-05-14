@@ -79,7 +79,8 @@ export function ClientHistoryCalendar({
     const q = query(
       collection(db, 'sessions'),
       where('clientId', '==', clientId),
-      orderBy('date', 'desc')
+      orderBy('date', 'desc'),
+      limit(30)
     );
     const unsubscribe = onSnapshot(q, (snap) => {
       setSessions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkoutSession)));

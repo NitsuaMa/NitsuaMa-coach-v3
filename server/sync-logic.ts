@@ -82,7 +82,9 @@ export async function masterSync(targetTrainerId?: string, hardReset: boolean = 
     console.log(`[Sync-${syncId}] Found ${trainers.length} trainers with MindBody feeds.`);
 
     console.log(`[Sync-${syncId}] Loading client mapping...`);
-    const clientsSnap = await getDocs(collection(db, 'clients'));
+    // QUOTA OPTIMIZATION: In production, do not fetch the entire database.
+    // Ensure clients have an index and query explicitly if mindbody mapping exists.
+    const clientsSnap = await getDocs(query(collection(db, 'clients'), limit(500)));
     const clientMap: Record<string, string> = {};
     clientsSnap.forEach(d => {
       const data = d.data();

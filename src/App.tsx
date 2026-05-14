@@ -5257,7 +5257,7 @@ function WorkoutTrackerView({
       });
       return () => unsubscribeLogs();
     }
-  }, [sessions]);
+  }, [sessions.map(s => s.id).sort().join(',')]);
 
   // Routine Alternation Logic & Historical Lifts Fetching
   useEffect(() => {
