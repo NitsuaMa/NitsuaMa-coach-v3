@@ -95,3 +95,32 @@ export function calculateExerciseVolume(log: { weight?: string, reps?: string, i
     return weight * (isNaN(reps) || reps <= 0 ? 1 : reps);
   }
 }
+
+/**
+ * Returns Tailwind classes for standardized muscle group color coding.
+ */
+export function getMuscleGroupColor(machineName: string = ''): string {
+  const lowerName = machineName.toLowerCase();
+  
+  if (lowerName.includes('chest') || lowerName.includes('pec') || lowerName.includes('push')) {
+    return 'bg-blue-50 text-blue-700 border-blue-200';
+  }
+  if (lowerName.includes('back') || lowerName.includes('row') || lowerName.includes('pull') || lowerName.includes('lat')) {
+    return 'bg-green-50 text-green-800 border-green-200';
+  }
+  if (lowerName.includes('leg') || lowerName.includes('squat') || lowerName.includes('press') || lowerName.includes('calf') || lowerName.includes('glute')) {
+    return 'bg-orange-50 text-orange-800 border-orange-200';
+  }
+  if (lowerName.includes('core') || lowerName.includes('abs') || lowerName.includes('trunk') || lowerName.includes('lumbar') || lowerName.includes('torso')) {
+    return 'bg-purple-50 text-purple-800 border-purple-200';
+  }
+  if (lowerName.includes('arm') || lowerName.includes('bicep') || lowerName.includes('tricep') || lowerName.includes('curl') || lowerName.includes('extension') || lowerName.includes('shoulder') || lowerName.includes('lateral')) {
+    return 'bg-red-50 text-red-800 border-red-200';
+  }
+  if (lowerName.includes('neck') || lowerName.includes('shrug')) {
+    return 'bg-amber-50 text-amber-800 border-amber-200';
+  }
+  
+  // Default neutral
+  return 'bg-slate-50 text-slate-700 border-slate-200';
+}

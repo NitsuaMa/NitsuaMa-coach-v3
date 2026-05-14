@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   ChevronLeft, 
   Dumbbell, 
@@ -32,7 +32,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { LineChart, Line, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis } from 'recharts';
+import { LineChart, Line, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, AreaChart, Area } from 'recharts';
 import { 
   Dialog, 
   DialogContent, 
@@ -42,9 +42,8 @@ import {
   DialogFooter
 } from '@/components/ui/dialog';
 import { Client, Machine, WorkoutSession, ExerciseLog, ClientMachineSetting, Routine } from '../types';
-import { cn } from '@/lib/utils';
+import { cn, parseSessionDate, getMuscleGroupColor, calculateExerciseVolume } from '../lib/utils';
 import { OperationType, handleFirestoreError } from '../lib/firestore-errors';
-import { parseSessionDate } from '../lib/utils';
 import { MachineSettingsDashboardModal } from './MachineSettingsDashboardModal';
 
 interface WorkoutChartGridProps {
@@ -177,7 +176,7 @@ export function WorkoutChartGrid({
       unsubscribeSessions();
       unsubscribeSettings();
     };
-  }, [clientId, user, sessionLimit]);
+  }, [clientId, user?.uid, sessionLimit]);
 
   useEffect(() => {
     // Auto-scroll to the far right (newest sessions) when sessions are loaded
@@ -217,6 +216,19 @@ export function WorkoutChartGrid({
   const getSetting = (machineId: string) => {
     return clientSettings.find(s => s.machineId === machineId)?.settings || {};
   };
+
+  const chartData = useMemo(() => {
+    return sessions.map((session, idx) => {
+      const logs = exerciseLogs.filter(l => l.sessionId === session.id);
+      const volume = logs.reduce((acc, log) => acc + calculateExerciseVolume(log), 0);
+      const dateLabel = new Date(parseSessionDate(session.date)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return {
+        name: `Sess ${idx + 1}`,
+        date: dateLabel,
+        volume
+      };
+    });
+  }, [sessions, exerciseLogs]);
 
   const filteredSortedMachines = [...machines]
     .sort((a, b) => (a.order || 0) - (b.order || 0))
@@ -328,6 +340,29 @@ export function WorkoutChartGrid({
         </div>
       </header>
 
+      {/* Sparkline Trend (Volume) */}
+      <div className="h-16 sm:h-24 bg-[#0e171e] shrink-0 border-b border-slate-800 relative z-40">
+         <ResponsiveContainer width="100%" height="100%">
+           <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 220, bottom: 0 }}>
+             <defs>
+               <linearGradient id="colorVol" x1="0" y1="0" x2="0" y2="1">
+                 <stop offset="5%" stopColor="#F06C22" stopOpacity={0.4}/>
+                 <stop offset="95%" stopColor="#F06C22" stopOpacity={0}/>
+               </linearGradient>
+             </defs>
+             <RechartsTooltip 
+               contentStyle={{ backgroundColor: '#0e171e', border: '1px solid #1e293b', borderRadius: '8px', fontSize: '10px', color: '#fff' }} 
+               itemStyle={{ color: '#F06C22', fontWeight: 900 }} 
+               formatter={(value: any) => [`${value.toLocaleString()} lbs`, "Total Volume"]}
+             />
+             <Area type="monotone" dataKey="volume" stroke="#F06C22" strokeWidth={2} fillOpacity={1} fill="url(#colorVol)" />
+           </AreaChart>
+         </ResponsiveContainer>
+         <div className="absolute top-2 left-6 sm:left-8 flex flex-col">
+           <span className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Volume Trend</span>
+         </div>
+      </div>
+
       {/* Grid Container with Sticky logic */}
       <div ref={scrollContainerRef} className="flex-1 overflow-auto relative bg-[#0e171e] custom-scrollbar scroll-smooth">
         <table className="border-collapse table-fixed min-w-max w-full">
@@ -391,16 +426,16 @@ export function WorkoutChartGrid({
                     className="sticky left-0 z-30 w-[180px] sm:w-[200px] bg-[#0A2E46] border-r border-slate-800 px-2.5 py-1 text-left group-hover:bg-slate-800/80 transition-colors shadow-[2px_0_10px_rgba(0,0,0,0.02)] cursor-pointer hover:border-r-[#F06C22]"
                   >
                     <div className="flex flex-col h-full justify-center space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                         <div className="w-4 h-4 rounded-md bg-slate-800 flex items-center justify-center shrink-0 shadow-sm shadow-zinc-200">
-                            <Dumbbell className="w-2.5 h-2.5 text-white" />
-                         </div>
-                         <h4 className="text-[10px] sm:text-[11px] font-black italic uppercase tracking-tighter text-white leading-tight truncate flex-1 group-hover:text-[#F06C22] transition-colors">
+                      <div className="flex items-center gap-1.5 overflow-hidden">
+                         <span className={cn(
+                            "text-[8px] font-black uppercase tracking-tighter leading-none truncate px-1.5 py-0.5 rounded-[4px] border shrink-0 inline-block max-w-[150px]",
+                            getMuscleGroupColor(machine.name)
+                         )}>
                             {machine.name}
-                            {clientSettings.find(s => s.machineId === machine.id)?.machineNotes?.some(n => n.isImportant) && (
-                              <AlertCircle className="w-2.5 h-2.5 text-red-500 shrink-0 inline ml-1" />
-                            )}
-                         </h4>
+                         </span>
+                         {clientSettings.find(s => s.machineId === machine.id)?.machineNotes?.some(n => n.isImportant) && (
+                           <AlertCircle className="w-3 h-3 text-red-500 shrink-0 inline" />
+                         )}
                       </div>
 
                       {/* Settings Component */}

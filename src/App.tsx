@@ -771,7 +771,7 @@ export default function App() {
     };
     
     seedData();
-  }, [isAuthReady, user, hasQuotaError]);
+  }, [isAuthReady, user?.uid, hasQuotaError]);
 
   // Cleanup old unassigned sessions (once daily per user session, limited to admin)
   useEffect(() => {
@@ -835,20 +835,14 @@ export default function App() {
       }
     };
     cleanup();
-  }, [isAuthReady, user, hasQuotaError]);
+  }, [isAuthReady, user?.uid, hasQuotaError]);
 
   // Data Listeners
-  const lastUidRef = React.useRef<string | null>(null);
   useEffect(() => {
     if (!isAuthReady || !user || hasQuotaError) {
-      lastUidRef.current = null;
       return;
     }
     
-    // Guard against redundant resubscriptions if user identity hasn't changed
-    if (lastUidRef.current === user.uid) return;
-    lastUidRef.current = user.uid;
-
     const trainersQuery = query(collection(db, 'trainers'), orderBy('order', 'asc'));
     
     // Check cache for trainers
@@ -974,7 +968,7 @@ export default function App() {
       unsubscribeTrainerFocuses();
       unsubscribeFocusRecords();
     };
-  }, [isAuthReady, user]);
+  }, [isAuthReady, user?.uid]);
 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const handleLogin = async () => {
@@ -5149,7 +5143,7 @@ function WorkoutTrackerView({
 
       return () => unsubscribe();
     }
-  }, [clientId]);
+  }, [clientId, user?.uid]);
 
   useEffect(() => {
     if (clientId && clients) {
@@ -5238,7 +5232,7 @@ function WorkoutTrackerView({
         unsubscribeNotes();
       };
     }
-  }, [clientId]);
+  }, [clientId, user?.uid]);
 
   useEffect(() => {
     if (sessions.length > 0) {

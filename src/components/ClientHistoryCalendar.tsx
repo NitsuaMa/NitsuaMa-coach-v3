@@ -88,7 +88,7 @@ export function ClientHistoryCalendar({
       handleFirestoreError(error, OperationType.GET, 'sessions');
     });
     return () => unsubscribe();
-  }, [clientId, user]);
+  }, [clientId, user?.uid]);
 
   // No longer fetching ALL logs here, using allLogs prop or specific session fetches
 
@@ -113,7 +113,7 @@ export function ClientHistoryCalendar({
       handleFirestoreError(error, OperationType.GET, 'exerciseLogs');
     });
     return () => unsubscribe();
-  }, [selectedSession, user]);
+  }, [selectedSession?.id, user?.uid]);
 
   const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();

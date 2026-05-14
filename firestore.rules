@@ -34,12 +34,29 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.email != null && (
+        // 
+        request.auth.token.email.lower() == "jurgensaj@gmail.com" || 
+        
+      );
+    }
+
+    function isTrainer() {
+      return isAuthenticated() && request.auth.token.email != null && (
+        isAdmin() || 
+        // ADD OTHER TRAINERS 
+      );
+    }
+
+    // Updating these legacy functions just in case they are called elsewhere
     function isHardcodedAdmin() {
-      return isAuthenticated();
+      return isAdmin();
     }
 
     function getRole() {
-      return 'admin';
+      return isAdmin() ? 'admin' : (isTrainer() ? 'trainer' : 'none');
+    }
     }
 
     function isAdmin() {

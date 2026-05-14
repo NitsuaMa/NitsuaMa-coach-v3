@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { auth } from '../firebase';
 import { db } from '../firebase';
 import { doc, setDoc, getDocs, collection, query, where, writeBatch } from 'firebase/firestore';
-import { parseSessionDate } from '../lib/utils';
+import { parseSessionDate, cn, getMuscleGroupColor } from '../lib/utils';
 import { Wrench, RefreshCw } from 'lucide-react';
 
 const calculateConservativeLoad = (machineId: string, bodyWeight: number, level: string) => {
@@ -299,8 +299,14 @@ export function ClientEquipmentPrescriptions({
             <tbody className="divide-y divide-slate-100">
               {machineData.map((m: any) => (
                 <tr key={m.id} className={`transition-colors hover:bg-slate-50 ${m.hasUsed ? 'bg-white' : 'bg-slate-50/50'}`}>
-                  <td className={`px-1.5 py-1.5 sm:px-2 font-black text-[9px] sm:text-[10px] uppercase tracking-tighter ${m.hasUsed ? 'text-[#115E8D]' : 'text-slate-400'}`}>
-                    {m.name}
+                  <td className="px-1.5 py-1.5 sm:px-2 align-middle">
+                    <span className={cn(
+                      "font-black text-[9px] sm:text-[10px] uppercase tracking-tighter px-1.5 py-0.5 rounded-[4px] border inline-block leading-none truncate max-w-[120px] sm:max-w-[150px]",
+                      getMuscleGroupColor(m.name),
+                      !m.hasUsed && "opacity-60 grayscale"
+                    )}>
+                      {m.name}
+                    </span>
                   </td>
                   <td className={`px-1.5 py-1.5 sm:px-2 text-[9px] sm:text-[10px] ${m.hasUsed ? 'text-slate-600 font-medium whitespace-nowrap' : 'text-slate-400'}`}>
                     {m.settingsStr}

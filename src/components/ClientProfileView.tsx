@@ -98,7 +98,7 @@ import { WorkoutChartGrid } from "./WorkoutChartGrid";
 import { ClientHistoryCalendar } from "./ClientHistoryCalendar";
 import { OccupationSelect } from "./OccupationSelect";
 import { getErgonomicRisk } from "../data/occupational-matrix";
-import { cn, parseSessionDate, getMillis, calculateExerciseVolume } from "../lib/utils";
+import { cn, parseSessionDate, getMillis, calculateExerciseVolume, getMuscleGroupColor } from "../lib/utils";
 import { RoutineBuilderView } from "./RoutineBuilderView";
 import { CLINICAL_FLAGS_MATRIX } from "../data/clinical-matrix";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
@@ -672,7 +672,7 @@ export function ClientProfileView({
     });
 
     return () => unsubscribe();
-  }, [clientId, activeTab, user]);
+  }, [clientId, activeTab, user?.uid]);
 
   useEffect(() => {
     if (!clientId || !user) return;
@@ -697,7 +697,7 @@ export function ClientProfileView({
       },
     );
     return () => unsubscribe();
-  }, [clientId]);
+  }, [clientId, user?.uid]);
 
   useEffect(() => {
     const myFocus = trainerFocuses.find((f) => f.trainerId === authTrainer?.id);
@@ -1020,7 +1020,7 @@ export function ClientProfileView({
                   variant="outline"
                   className="bg-[#38BDF8]/10 text-[#38BDF8] border-[#38BDF8]/30 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest shadow-[0_0_10px_rgba(56,189,248,0.2)]"
                 >
-                  Session #{calculatedSessionCount}
+                  Session #{calculatedSessionCount + 1}
                 </Badge>
                 <button
                   onClick={() => {
@@ -1201,45 +1201,29 @@ export function ClientProfileView({
         className="w-full flex-1 flex flex-col min-h-0"
         onValueChange={setActiveTab}
       >
-        <div className="mb-2">
-          <TabsList className="bg-transparent p-0 flex flex-wrap gap-1 w-full h-auto">
-            <TabsTrigger
-              value="overview"
-              className="flex-1 min-w-[80px] rounded-full border border-slate-200 h-[26px] px-3 font-black uppercase text-[9px] tracking-widest text-[#68717A] bg-transparent data-[state=active]:border-transparent data-[state=active]:bg-[#115E8D] data-[state=active]:text-white transition-all data-[state=active]:shadow-sm"
-            >
-              Journey
-            </TabsTrigger>
-            <TabsTrigger
-              value="equipment"
-              className="flex-1 min-w-[80px] rounded-full border border-slate-200 h-[26px] px-3 font-black uppercase text-[9px] tracking-widest text-[#68717A] bg-transparent data-[state=active]:border-transparent data-[state=active]:bg-[#115E8D] data-[state=active]:text-white transition-all data-[state=active]:shadow-sm"
-            >
-              Equipment
-            </TabsTrigger>
-            <TabsTrigger
-              value="routines"
-              className="flex-1 min-w-[80px] rounded-full border border-slate-200 h-[26px] px-3 font-black uppercase text-[9px] tracking-widest text-[#68717A] bg-transparent data-[state=active]:border-transparent data-[state=active]:bg-[#115E8D] data-[state=active]:text-white transition-all data-[state=active]:shadow-sm"
-            >
-              Routines
-            </TabsTrigger>
-            <TabsTrigger
-              value="focus"
-              className="flex-1 min-w-[80px] rounded-full border border-slate-200 h-[26px] px-3 font-black uppercase text-[9px] tracking-widest text-[#68717A] bg-transparent data-[state=active]:border-transparent data-[state=active]:bg-[#115E8D] data-[state=active]:text-white transition-all data-[state=active]:shadow-sm"
-            >
-              Focus
-            </TabsTrigger>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex-1 min-w-[80px] rounded-full border border-slate-200 h-[26px] px-3 font-black uppercase text-[9px] tracking-widest text-[#68717A] bg-transparent hover:bg-slate-100 transition-all outline-none">
-                More...
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-48">
-                <DropdownMenuItem onClick={() => setActiveTab('details')} className="uppercase text-[10px] font-black tracking-widest cursor-pointer">Details</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setActiveTab('history')} className="uppercase text-[10px] font-black tracking-widest cursor-pointer">History</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setActiveTab('statistics')} className="uppercase text-[10px] font-black tracking-widest cursor-pointer">Statistics</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setActiveTab('reports')} className="uppercase text-[10px] font-black tracking-widest cursor-pointer">Reports</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </TabsList>
+        <div className="mb-3 w-full">
+          <div className="overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
+            <TabsList className="bg-transparent p-0 flex flex-nowrap w-max gap-1.5 h-auto">
+              {[
+                { val: "overview", label: "Journey" },
+                { val: "equipment", label: "Equipment" },
+                { val: "routines", label: "Routines" },
+                { val: "focus", label: "Focus" },
+                { val: "details", label: "Details" },
+                { val: "history", label: "History" },
+                { val: "statistics", label: "Statistics" },
+                { val: "reports", label: "Reports" },
+              ].map((tab) => (
+                <TabsTrigger
+                  key={tab.val}
+                  value={tab.val}
+                  className="flex-none min-w-[80px] rounded-full border border-slate-200 h-[40px] px-4 font-black uppercase text-[10px] tracking-widest text-[#68717A] bg-transparent data-[state=active]:border-transparent data-[state=active]:bg-[#115E8D] data-[state=active]:text-white transition-all data-[state=active]:shadow-sm snap-center"
+                >
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
         </div>
 
         <TabsContent value="equipment">
@@ -1248,17 +1232,20 @@ export function ClientProfileView({
 
         <TabsContent
           value="overview"
-          className="mt-0 flex-1 overflow-hidden min-h-0 bg-white rounded-xl shadow-sm border border-slate-200 relative"
+          className="mt-0 flex-1 overflow-hidden min-h-0 flex flex-col rounded-xl relative"
         >
-          <Button
-            onClick={() => setShowFullChart(true)}
-            size="sm"
-            variant="ghost"
-            className="absolute top-2 right-2 z-10 h-6 px-3 text-[10px] uppercase font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 bg-white/80 border border-slate-200 shadow-sm backdrop-blur-sm transition-all"
-          >
-            <Maximize2 className="w-3 h-3 mr-1.5" /> Expanded Journey
-          </Button>
-          <div className="w-full h-full overflow-hidden">
+          <div className="flex items-center justify-between mb-3 px-2 flex-none">
+             <h3 className="text-[13px] font-black uppercase text-slate-800 tracking-widest pl-1 border-l-4 border-[#F06C22]">Recent Journey</h3>
+             <Button
+               onClick={() => setShowFullChart(true)}
+               size="sm"
+               variant="outline"
+               className="h-10 px-5 text-[10px] uppercase font-black tracking-widest text-slate-700 hover:text-[#115E8D] border-slate-300 shadow-sm transition-all hover:bg-slate-50 rounded-full"
+             >
+               <Maximize2 className="w-3.5 h-3.5 mr-1.5" /> Expanded Journey
+             </Button>
+          </div>
+          <div className="w-full flex-1 overflow-hidden bg-white shadow-sm border border-slate-200 rounded-xl relative">
             <table className="w-full text-left border-collapse table-fixed select-none min-w-full">
               <thead>
                 <tr className="bg-[#115E8D] text-white uppercase text-[9px] font-black tracking-widest leading-none h-[32px]">
@@ -1333,8 +1320,11 @@ export function ClientProfileView({
                         <td className="p-1 pl-4 border-r border-slate-200/60 truncate align-middle relative overflow-hidden">
                           <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#115E8D]/0 group-hover:bg-[#115E8D] transition-colors" />
                           <div className="flex flex-col justify-center translate-y-[1px]">
-                            <div className="flex items-center gap-1 mb-0.5 max-w-full">
-                              <span className="font-bold text-[11px] text-[#115E8D] leading-none truncate">
+                            <div className="flex items-center gap-1.5 mb-0.5 max-w-full">
+                              <span className={cn(
+                                "font-black uppercase tracking-tighter text-[9px] px-1.5 py-0.5 rounded-[4px] border leading-none truncate shrink-0 max-w-full inline-block",
+                                getMuscleGroupColor(machine.name)
+                              )}>
                                 {machine.name}
                               </span>
                               {clientSettings[machine.id!]?.machineNotes?.some(
