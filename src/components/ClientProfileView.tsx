@@ -41,6 +41,7 @@ import {
   Maximize2,
   Battery,
   CalendarDays,
+  Star
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ReferenceLine, CartesianGrid, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from "recharts";
@@ -98,7 +99,7 @@ import { WorkoutChartGrid } from "./WorkoutChartGrid";
 import { ClientHistoryCalendar } from "./ClientHistoryCalendar";
 import { OccupationSelect } from "./OccupationSelect";
 import { getErgonomicRisk } from "../data/occupational-matrix";
-import { cn, parseSessionDate, getMillis, calculateExerciseVolume, getMuscleGroupColor } from "../lib/utils";
+import { cn, parseSessionDate, getMillis, calculateExerciseVolume, getMuscleGroupColor, isBig5Machine } from "../lib/utils";
 import { RoutineBuilderView } from "./RoutineBuilderView";
 import { CLINICAL_FLAGS_MATRIX } from "../data/clinical-matrix";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
@@ -652,7 +653,7 @@ export function ClientProfileView({
 
   useEffect(() => {
     if (!clientId || hasQuotaError || !user) return;
-    if (activeTab !== "reports") return;
+    if (activeTab !== "statistics") return;
 
     const q = query(
       collection(db, "progressReports"),
@@ -1212,7 +1213,6 @@ export function ClientProfileView({
                 { val: "details", label: "Details" },
                 { val: "history", label: "History" },
                 { val: "statistics", label: "Statistics" },
-                { val: "reports", label: "Reports" },
               ].map((tab) => (
                 <TabsTrigger
                   key={tab.val}
@@ -1322,10 +1322,13 @@ export function ClientProfileView({
                           <div className="flex flex-col justify-center translate-y-[1px]">
                             <div className="flex items-center gap-1.5 mb-0.5 max-w-full">
                               <span className={cn(
-                                "font-black uppercase tracking-tighter text-[9px] px-1.5 py-0.5 rounded-[4px] border leading-none truncate shrink-0 max-w-full inline-block",
+                                "font-black uppercase tracking-tighter text-[9px] px-1.5 py-0.5 rounded-[4px] border leading-none truncate shrink-0 max-w-full inline-flex items-center justify-between",
                                 getMuscleGroupColor(machine.name)
                               )}>
-                                {machine.name}
+                                <span>{machine.name}</span>
+                                {isBig5Machine(machine.name) && (
+                                  <Star className="w-2.5 h-2.5 ml-1 fill-amber-400 text-amber-500 inline shrink-0" />
+                                )}
                               </span>
                               {clientSettings[machine.id!]?.machineNotes?.some(
                                 (n) => n.isImportant,
@@ -1672,8 +1675,10 @@ export function ClientProfileView({
           </div>
         </TabsContent>
 
-        <TabsContent value="reports">
-          <Card className="rounded-[40px] border-2 shadow-xl overflow-hidden min-h-[400px]">
+
+
+        <TabsContent value="statistics" className="space-y-6">
+          <Card className="rounded-[40px] border-2 shadow-xl overflow-hidden min-h-[300px]">
             <CardHeader className="p-8 border-b">
               <div className="flex justify-between items-center">
                 <div>
@@ -1695,7 +1700,7 @@ export function ClientProfileView({
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="divide-y">
+              <div className="divide-y relative max-h-[400px] overflow-y-auto custom-scrollbar">
                 {progressReports.length > 0 ? (
                   progressReports
                     .sort(
@@ -1776,7 +1781,7 @@ export function ClientProfileView({
                       </div>
                     ))
                 ) : (
-                  <div className="p-24 text-center space-y-4">
+                  <div className="p-12 text-center space-y-4">
                     <TrendingUp className="w-12 h-12 text-muted-foreground mx-auto opacity-20" />
                     <p className="text-muted-foreground font-bold uppercase tracking-widest text-xs">
                       No progress reports registered in archive
@@ -1793,9 +1798,7 @@ export function ClientProfileView({
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        <TabsContent value="statistics" className="space-y-6">
           {/* Consistency & Training Frequency Insights */}
           {(() => {
             const completedSessions = sessions.filter(s => s.status === 'Completed').sort((a,b) => parseSessionDate(a.date) - parseSessionDate(b.date));

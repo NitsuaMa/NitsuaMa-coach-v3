@@ -217,8 +217,11 @@ export function MachineSettingsDashboardModal({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             {targetMachine?.settingOptions?.map((opt) => (
               <div key={opt} className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-[#68717A] ml-1">
-                  {opt}
+                <label className="text-[10px] font-black uppercase tracking-widest text-[#68717A] ml-1 flex justify-between items-center pr-1">
+                  <span>{opt}</span>
+                  {targetMachine?.standardSettings?.[opt] && (
+                    <span className="text-slate-500 font-semibold" title="Standard Setting">STD: {targetMachine.standardSettings[opt]}</span>
+                  )}
                 </label>
                 <Input
                   value={editingSettings.settings[opt] || ""}
@@ -231,7 +234,7 @@ export function MachineSettingsDashboardModal({
                        },
                      })
                    }
-                  placeholder="--"
+                  placeholder={targetMachine?.standardSettings?.[opt] || "--"}
                   className="h-12 rounded-xl bg-slate-800 border border-slate-700 focus:border-[#F06C22] focus:ring-[#F06C22] text-lg font-black text-[#f8fafc] px-4 tabular-nums transition-all shadow-sm"
                 />
               </div>

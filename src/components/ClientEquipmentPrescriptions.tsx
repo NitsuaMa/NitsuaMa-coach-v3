@@ -8,8 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { auth } from '../firebase';
 import { db } from '../firebase';
 import { doc, setDoc, getDocs, collection, query, where, writeBatch } from 'firebase/firestore';
-import { parseSessionDate, cn, getMuscleGroupColor } from '../lib/utils';
-import { Wrench, RefreshCw } from 'lucide-react';
+import { parseSessionDate, cn, getMuscleGroupColor, isBig5Machine } from '../lib/utils';
+import { Wrench, RefreshCw, Star } from 'lucide-react';
 
 const calculateConservativeLoad = (machineId: string, bodyWeight: number, level: string) => {
   const isLowerBody = ['leg_press', 'squat', 'leg_extension', 'leg_curl'].includes(machineId.toLowerCase()) || machineId.includes('leg');
@@ -301,11 +301,14 @@ export function ClientEquipmentPrescriptions({
                 <tr key={m.id} className={`transition-colors hover:bg-slate-50 ${m.hasUsed ? 'bg-white' : 'bg-slate-50/50'}`}>
                   <td className="px-1.5 py-1.5 sm:px-2 align-middle">
                     <span className={cn(
-                      "font-black text-[9px] sm:text-[10px] uppercase tracking-tighter px-1.5 py-0.5 rounded-[4px] border inline-block leading-none truncate max-w-[120px] sm:max-w-[150px]",
+                      "font-black text-[9px] sm:text-[10px] uppercase tracking-tighter px-1.5 py-0.5 rounded-[4px] border inline-flex items-center justify-between leading-none max-w-[120px] sm:max-w-[150px]",
                       getMuscleGroupColor(m.name),
                       !m.hasUsed && "opacity-60 grayscale"
                     )}>
-                      {m.name}
+                      <span className="truncate">{m.name}</span>
+                      {isBig5Machine(m.name) && (
+                        <Star className="w-2.5 h-2.5 sm:w-3 sm:h-3 ml-1 fill-amber-400 text-amber-500 shrink-0" />
+                      )}
                     </span>
                   </td>
                   <td className={`px-1.5 py-1.5 sm:px-2 text-[9px] sm:text-[10px] ${m.hasUsed ? 'text-slate-600 font-medium whitespace-nowrap' : 'text-slate-400'}`}>

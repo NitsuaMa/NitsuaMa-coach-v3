@@ -12,7 +12,8 @@ import {
   Activity,
   UserCircle,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Star
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -42,7 +43,7 @@ import {
   DialogFooter
 } from '@/components/ui/dialog';
 import { Client, Machine, WorkoutSession, ExerciseLog, ClientMachineSetting, Routine } from '../types';
-import { cn, parseSessionDate, getMuscleGroupColor, calculateExerciseVolume } from '../lib/utils';
+import { cn, parseSessionDate, getMuscleGroupColor, calculateExerciseVolume, isBig5Machine } from '../lib/utils';
 import { OperationType, handleFirestoreError } from '../lib/firestore-errors';
 import { MachineSettingsDashboardModal } from './MachineSettingsDashboardModal';
 
@@ -428,10 +429,13 @@ export function WorkoutChartGrid({
                     <div className="flex flex-col h-full justify-center space-y-0.5">
                       <div className="flex items-center gap-1.5 overflow-hidden">
                          <span className={cn(
-                            "text-[8px] font-black uppercase tracking-tighter leading-none truncate px-1.5 py-0.5 rounded-[4px] border shrink-0 inline-block max-w-[150px]",
+                            "text-[8px] font-black uppercase tracking-tighter leading-none truncate px-1.5 py-0.5 rounded-[4px] border shrink-0 inline-block max-w-[150px] flex items-center justify-between",
                             getMuscleGroupColor(machine.name)
                          )}>
-                            {machine.name}
+                            <span>{machine.name}</span>
+                            {isBig5Machine(machine.name) && (
+                              <Star className="w-2.5 h-2.5 ml-1 fill-amber-400 text-amber-500 inline shrink-0" />
+                            )}
                          </span>
                          {clientSettings.find(s => s.machineId === machine.id)?.machineNotes?.some(n => n.isImportant) && (
                            <AlertCircle className="w-3 h-3 text-red-500 shrink-0 inline" />

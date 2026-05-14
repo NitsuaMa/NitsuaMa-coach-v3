@@ -24,6 +24,7 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CreateTrainerModal } from './CreateTrainerModal';
+import { TrainerMachineEditor } from './TrainerMachineEditor';
 import { Machine, Client, Trainer, WorkoutSession, ScheduleEntry } from '../types';
 import { findMatchingTrainer, normalizeName } from '../lib/sync-utils';
 
@@ -58,7 +59,7 @@ export function TrainerControlHubView({
   const [isCleansingApp, setIsCleansingApp] = useState(false);
 
   // Layout State
-  const [activeTab, setActiveTab] = useState<'team'|'security'|'protocol'|'studio'|'data'>('team');
+  const [activeTab, setActiveTab] = useState<'team'|'security'|'protocol'|'studio'|'data'|'equipment'>('team');
 
   // Simulated Settings State
   const [adminPin, setAdminPin] = useState('');
@@ -479,6 +480,7 @@ export function TrainerControlHubView({
             { id: 'team', label: 'Team Management', icon: UserCog },
             { id: 'security', label: 'System Security', icon: ShieldAlert },
             { id: 'protocol', label: 'Protocol Defaults', icon: Settings2 },
+            { id: 'equipment', label: 'Equipment Configuration', icon: Database },
             { id: 'studio', label: 'Studio Config', icon: Building2 },
             { id: 'data', label: 'Data & Telemetry', icon: HardDrive },
           ].map(tab => {
@@ -486,7 +488,7 @@ export function TrainerControlHubView({
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as 'team'|'security'|'protocol'|'studio'|'data')}
+                onClick={() => setActiveTab(tab.id as any)}
                 className={cn(
                   "flex items-center gap-3 px-4 py-4 rounded-2xl transition-all border text-left font-bold uppercase text-[11px] tracking-widest",
                   activeTab === tab.id 
@@ -769,6 +771,10 @@ export function TrainerControlHubView({
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {activeTab === 'equipment' && (
+            <TrainerMachineEditor machines={machines} />
           )}
 
           {activeTab === 'studio' && (

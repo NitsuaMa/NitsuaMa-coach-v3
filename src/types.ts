@@ -109,6 +109,7 @@ export interface Machine {
   fullName?: string;
   settings?: string; // Repurposed as "Standard Setup Tips"
   settingOptions?: string[]; // e.g. ["Seat", "Pads", "Backrest"]
+  standardSettings?: Record<string, string>; // e.g. {"Seat": "5", "Pads": "2"}
   order?: number;
   imageUrl?: string;
   anatomicalRegion?: string;

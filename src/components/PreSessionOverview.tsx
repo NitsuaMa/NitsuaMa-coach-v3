@@ -292,7 +292,7 @@ export function PreSessionOverview({
                      defaultWeight = calculatedWeight > 0 ? calculatedWeight : null;
                   }
 
-                  const lastSessionDate = metricData?.lastPerformedDate?.toDate?.() || metricData?.lastPerformedDate ? new Date(metricData.lastPerformedDate) : null;
+                  const machineLastPerformedDate = safeToDate(metricData?.lastPerformedDate);
                   const wasPerformedInLastSession = lastSession && metricData?.lastSessionId === lastSession.id;
                   
                   return (
@@ -327,9 +327,9 @@ export function PreSessionOverview({
                                 </span>
                               )}
                             </div>
-                            {metricData && !wasPerformedInLastSession && lastSessionDate && (
+                            {metricData && !wasPerformedInLastSession && machineLastPerformedDate && !isNaN(machineLastPerformedDate.getTime()) && (
                               <span className="text-[9px] font-bold uppercase tracking-widest text-[#F06C22]">
-                                Last Performed on {lastSessionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}{metricData?.lastPerformedSessionNumber ? ` (Session ${metricData.lastPerformedSessionNumber})` : ''}
+                                Last Performed on {machineLastPerformedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}{metricData?.lastPerformedSessionNumber ? ` (Session ${metricData.lastPerformedSessionNumber})` : ''}
                               </span>
                             )}
                           </div>

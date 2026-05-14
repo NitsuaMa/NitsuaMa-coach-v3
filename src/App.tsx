@@ -4136,9 +4136,16 @@ function MachineSettingsDialog({
           <div className="space-y-4">
             {machine.settingOptions?.map((option) => (
               <div key={option} className="space-y-2">
-                <Label className="text-sm font-bold">{option}</Label>
+                <div className="flex justify-between items-center pr-1">
+                  <Label className="text-sm font-bold">{option}</Label>
+                  {machine.standardSettings?.[option] && (
+                    <span className="text-xs font-semibold text-slate-500" title="Standard Setting">
+                      STD: {machine.standardSettings[option]}
+                    </span>
+                  )}
+                </div>
                 <Input 
-                  placeholder={`Enter ${option} setting`}
+                  placeholder={machine.standardSettings?.[option] || `Enter ${option} setting`}
                   value={settings[option] || ''}
                   onChange={(e) => setSettings({ ...settings, [option]: e.target.value })}
                   className="h-12 rounded-xl font-bold"
