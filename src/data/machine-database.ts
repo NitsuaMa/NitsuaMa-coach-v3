@@ -1,3 +1,10 @@
+import legPressImg from '../assets/images/regenerated_image_1778764853982.png';
+import legCurlImg from '../assets/images/regenerated_image_1778764857234.png';
+import legExtensionImg from '../assets/images/regenerated_image_1778764860741.png';
+import abductionImg from '../assets/images/regenerated_image_1778764863940.png';
+import adductionImg from '../assets/images/regenerated_image_1778764867344.png';
+import chestPressImg from '../assets/images/regenerated_image_1778764870689.png';
+
 export interface MachineKnowledge {
   kinematicClassification?: string;
   setupGap?: string;
@@ -27,7 +34,7 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "leg_press": {
     id: "leg_press",
     name: "Leg Press",
-    imageUrl: "/regenerated_image_1777418501273.png?v=2",
+    imageUrl: legPressImg,
     kinematicClassification: "Compound Push",
     executionPosture: "Chest Up / Anterior Pelvic Tilt",
     requiresHandoff: false,
@@ -83,6 +90,7 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "leg_curl": {
     id: "leg_curl",
     name: "Leg Curl",
+    imageUrl: legCurlImg,
     kinematicClassification: "Simple Pull",
     executionPosture: "Chest Up / Anterior Pelvic Tilt",
     requiresHandoff: false,
@@ -143,7 +151,7 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "leg_extension": {
     id: "leg_extension",
     name: "Leg Extension",
-    imageUrl: "/regenerated_image_1777418524469.png?v=2",
+    imageUrl: legExtensionImg,
     kinematicClassification: "Simple Push",
     executionPosture: "Chest Up / Anterior Pelvic Tilt",
     requiresHandoff: false,
@@ -206,6 +214,7 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "abduction": {
     id: "abduction",
     name: "Abduction",
+    imageUrl: abductionImg,
     kinematicClassification: "Simple Push",
     executionPosture: "Chest Up / Anterior Pelvic Tilt",
     requiresHandoff: false,
@@ -262,6 +271,7 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "adduction": {
     id: "adduction",
     name: "Adduction",
+    imageUrl: adductionImg,
     kinematicClassification: "Simple Pull",
     executionPosture: "Chest Up / Anterior Pelvic Tilt",
     requiresHandoff: false,
@@ -320,7 +330,7 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "chest_press": {
     id: "chest_press",
     name: "Chest Press",
-    imageUrl: "/regenerated_image_1777418504308.png?v=2",
+    imageUrl: chestPressImg,
     kinematicClassification: "Compound Push",
     executionPosture: "Chest Up / Anterior Pelvic Tilt",
     requiresHandoff: false,
@@ -581,7 +591,6 @@ export const MACHINE_DATABASE: Record<string, MachineKnowledge> = {
   "compound_row": {
     id: "compound_row",
     name: "Compound Row",
-    imageUrl: "/regenerated_image_1777418531749.png?v=2",
     kinematicClassification: "Compound Pull",
     executionPosture: "Chest Up / Anterior Pelvic Tilt",
     requiresHandoff: true,

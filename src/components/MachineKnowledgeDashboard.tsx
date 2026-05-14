@@ -35,7 +35,7 @@ const CATEGORIES = [
   "Trunk/Spine/Core"
 ];
 
-export function MachineKnowledgeDashboard({ setView }: { setView: (view: any) => void }) {
+export function MachineKnowledgeDashboard({ setView, machines }: { setView: (view: any) => void; machines?: any[] }) {
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [activeMachineId, setActiveMachineId] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -108,6 +108,7 @@ export function MachineKnowledgeDashboard({ setView }: { setView: (view: any) =>
     : MACHINE_LIST.filter(m => m.category === activeCategory);
 
   const activeMachine = MACHINE_LIST.find(m => m.id === activeMachineId);
+  const syncedMachine = machines?.find(m => m.id === activeMachine?.id);
   const activeMachineIndex = activeMachine ? MACHINE_LIST.findIndex(m => m.id === activeMachine.id) + 1 : 0;
 
   return (
@@ -499,6 +500,19 @@ export function MachineKnowledgeDashboard({ setView }: { setView: (view: any) =>
                       Setup & Alignment Strategy
                     </span>
                     <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar max-h-[250px]">
+                      {syncedMachine?.standardSettings && Object.keys(syncedMachine.standardSettings).length > 0 && (
+                        <div className="mb-4">
+                          <h4 className="text-[9px] font-black uppercase text-[#F06C22] tracking-widest mb-2 border-b border-white/10 pb-1">Standard Measurements</h4>
+                          <div className="grid grid-cols-2 gap-2 mb-3">
+                            {Object.entries(syncedMachine.standardSettings).map(([key, val]) => (
+                               <div key={key} className="bg-slate-900 border border-slate-700 rounded-lg p-2.5 shadow-inner">
+                                  <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">{key}</p>
+                                  <p className="text-white font-black text-sm">{String(val)}</p>
+                               </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {isEditMode ? (
                         <Textarea 
                           value={(editedMachine?.setupCues || []).join('\n')} 

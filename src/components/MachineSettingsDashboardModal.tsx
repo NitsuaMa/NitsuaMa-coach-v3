@@ -33,7 +33,13 @@ export function MachineSettingsDashboardModal({
   // Filter logs for this machine
   const machineLogs = exerciseLogs
     .filter((l) => l.machineId === mId && (parseInt(l.weight || "0") > 0))
-    .sort((a, b) => a.createdAt.toDate().getTime() - b.createdAt.toDate().getTime());
+    .sort((a, b) => {
+      const sessionA = sessions.find((s) => s.id === a.sessionId);
+      const sessionB = sessions.find((s) => s.id === b.sessionId);
+      const dateA = sessionA ? parseSessionDate(sessionA.date) : a.createdAt.toDate().getTime();
+      const dateB = sessionB ? parseSessionDate(sessionB.date) : b.createdAt.toDate().getTime();
+      return dateA - dateB;
+    });
 
   // Current weight is from the last log
   const currentLog = machineLogs.length > 0 ? machineLogs[machineLogs.length - 1] : null;
@@ -55,13 +61,12 @@ export function MachineSettingsDashboardModal({
     : "";
   const prDisplayDate = prSessionDate ? new Date(parseSessionDate(prSessionDate)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
 
-  // Calculate Trend Data (Weight Changes Only)
+  // Calculate Trend Data
   const trendData = [];
-  let lastWeight = -1;
 
   for (const log of machineLogs) {
     const weight = parseInt(log.weight || "0") || 0;
-    if (weight !== lastWeight && weight > 0) {
+    if (weight > 0) {
       const session = sessions.find(s => s.id === log.sessionId);
       if (session) {
         trendData.push({
@@ -75,7 +80,6 @@ export function MachineSettingsDashboardModal({
           isStatic: log.isStaticHold || log.isTSC || (log.seconds && (!log.reps || parseInt(log.reps) === 0)),
           dateStr: session.date
         });
-        lastWeight = weight;
       }
     }
   }

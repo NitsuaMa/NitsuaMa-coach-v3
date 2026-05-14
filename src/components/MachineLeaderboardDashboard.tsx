@@ -33,12 +33,18 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { cn } from '@/lib/utils';
 import { OCCUPATIONS } from '../data/occupational-matrix';
 import { MACHINE_DATABASE } from '../data/machine-database';
+import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { db } from '../firebase';
+import { Client, ExerciseLog, ClientMachineSetting } from '../types';
+import { OperationType, handleFirestoreError } from '../lib/firestore-errors';
 
 // --- Types ---
 interface LeaderboardEntry {
   id: string;
   name: string;
   weight: number;
+  initialWeight: number;
+  strengthGainPercent: number;
   reps: number;
   gap: number;
   setup: string;
@@ -73,7 +79,7 @@ const GAP_OPTIONS = [
 ];
 
 // --- Sub-component: Chart ---
-const LeaderboardChart = ({ data, activeClientId }: { data: LeaderboardEntry[], activeClientId?: string }) => {
+const LeaderboardChart = ({ data, activeClientId, sortBy }: { data: LeaderboardEntry[], activeClientId?: string, sortBy: 'weight' | 'gain' }) => {
   const chartRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
@@ -92,7 +98,7 @@ const LeaderboardChart = ({ data, activeClientId }: { data: LeaderboardEntry[], 
       .attr('transform', `translate(${margin.left},${margin.top})`);
 
     const x = d3.scaleLinear()
-      .domain([0, d3.max(data, d => d.weight) || 100])
+      .domain([0, d3.max(data, d => sortBy === 'gain' ? d.strengthGainPercent : d.weight) || 100])
       .range([0, width]);
 
     const y = d3.scaleBand()
@@ -127,7 +133,7 @@ const LeaderboardChart = ({ data, activeClientId }: { data: LeaderboardEntry[], 
       })
       .transition()
       .duration(800)
-      .attr('width', d => x(d.weight));
+      .attr('width', d => x(sortBy === 'gain' ? d.strengthGainPercent : d.weight));
 
     // Client Labels (Y Axis)
     bars.append('text')
@@ -140,19 +146,19 @@ const LeaderboardChart = ({ data, activeClientId }: { data: LeaderboardEntry[], 
       .attr('font-weight', '700')
       .text(d => d.name);
 
-    // Weight Labels
+    // Value Labels
     bars.append('text')
-      .attr('x', d => x(d.weight) + 8)
+      .attr('x', d => x(sortBy === 'gain' ? d.strengthGainPercent : d.weight) + 8)
       .attr('y', d => (y(d.id) || 0) + y.bandwidth() / 2)
       .attr('dy', '.15em')
       .attr('fill', '#FFFFFF')
       .attr('font-size', '14px')
       .attr('font-weight', '900')
-      .text(d => `${d.weight} LBS`);
+      .text(d => sortBy === 'gain' ? `+${d.strengthGainPercent}%` : `${d.weight} LBS`);
 
-    // Setup Badges (Small text below weight)
+    // Badges (Small text below value)
     bars.append('text')
-      .attr('x', d => x(d.weight) + 8)
+      .attr('x', d => x(sortBy === 'gain' ? d.strengthGainPercent : d.weight) + 8)
       .attr('y', d => (y(d.id) || 0) + y.bandwidth() / 2 + 14)
       .attr('dy', '.35em')
       .attr('fill', '#64748B')
@@ -160,7 +166,7 @@ const LeaderboardChart = ({ data, activeClientId }: { data: LeaderboardEntry[], 
       .attr('font-weight', '700')
       .attr('text-transform', 'uppercase')
       .attr('letter-spacing', '0.05em')
-      .text(d => `${d.reps} REPS • G:${d.gap} ${d.setup}`);
+      .text(d => sortBy === 'gain' ? `FROM ${d.initialWeight} LBS TO ${d.weight} LBS` : `${d.reps} REPS • G:${d.gap} ${d.setup}`);
 
     // Rank numbers
     bars.append('text')
@@ -184,7 +190,7 @@ const LeaderboardChart = ({ data, activeClientId }: { data: LeaderboardEntry[], 
     goldGradient.append('stop').attr('offset', '0%').attr('stop-color', '#F59E0B');
     goldGradient.append('stop').attr('offset', '100%').attr('stop-color', '#D97706');
 
-  }, [data, activeClientId]);
+  }, [data, activeClientId, sortBy]);
 
   return (
     <div className="w-full overflow-x-auto min-h-[500px]">
@@ -194,20 +200,155 @@ const LeaderboardChart = ({ data, activeClientId }: { data: LeaderboardEntry[], 
 };
 
 // --- Main Component ---
-export function MachineLeaderboardDashboard({ onBack }: { onBack?: () => void }) {
+export function MachineLeaderboardDashboard({ 
+  onBack,
+  clients 
+}: { 
+  onBack?: () => void;
+  clients?: Client[];
+}) {
   const [selectedMachine, setSelectedMachine] = useState<string>('leg_press');
-  const [gapFilter, setGapFilter] = useState<string>('0');
+  const [gapFilter, setGapFilter] = useState<string>('all');
   const [occupationFilter, setOccupationFilter] = useState<string>('all');
   const [ageFilter, setAgeFilter] = useState<string>('all');
   const [genderFilter, setGenderFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'weight' | 'gain'>('weight');
+  const [isLoading, setIsLoading] = useState(false);
 
   const [allEntries, setAllEntries] = useState<LeaderboardEntry[]>([]);
   
   useEffect(() => {
-    // In a real implementation this would fetch leaderboard entries from the backend relative to the selected machine.
-    setAllEntries([]);
-  }, [selectedMachine]);
+    async function fetchLeaderboardData() {
+      if (!clients || clients.length === 0) return;
+      setIsLoading(true);
+
+      try {
+        // Fetch machine settings for gaps
+        const settingsQ = query(
+          collection(db, 'clientMachineSettings'),
+          where('machineId', '==', selectedMachine)
+        );
+        const settingsSnap = await getDocs(settingsQ);
+        const settingsMap: Record<string, ClientMachineSetting> = {};
+        settingsSnap.docs.forEach(d => {
+          const s = d.data() as ClientMachineSetting;
+          settingsMap[s.clientId] = s;
+        });
+
+        // We can't query by machineId without an index if we also order, 
+        // so we just query all logs for this machine and sort in memory,
+        // or query where machineId == selectedMachine
+        const logsQ = query(
+          collection(db, 'exerciseLogs'),
+          where('machineId', '==', selectedMachine)
+        );
+        const logsSnap = await getDocs(logsQ);
+        
+        // Map over logs to find highest weight per client and also first weight
+        const maxLogsByClient: Record<string, ExerciseLog> = {};
+        const firstWeightByClient: Record<string, number> = {};
+
+        // Sort logs descending by date to find max and first (first would be oldest)
+        const sortedLogs = logsSnap.docs.map(d => d.data() as ExerciseLog).sort((a, b) => {
+           const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+           const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+           return timeA - timeB; // ascending, so first is oldest
+        });
+
+        sortedLogs.forEach(log => {
+          if (!log.clientId) return; // Need clientId
+          
+          const weight = parseInt(log.weight || '0', 10) || 0;
+          if (weight === 0) return;
+
+          // Record first weight seen for this client
+          if (firstWeightByClient[log.clientId] === undefined) {
+             firstWeightByClient[log.clientId] = weight;
+          }
+
+          const currentMax = maxLogsByClient[log.clientId];
+          const currentMaxWeight = currentMax ? (parseInt(currentMax.weight || '0', 10) || 0) : 0;
+
+          if (!currentMax || weight >= currentMaxWeight) {
+             // For ties in weight, taking the one with more reps could be an optimization,
+             // but taking the latest or just strictly weight is fine.
+             if (weight > currentMaxWeight || !currentMax) {
+               maxLogsByClient[log.clientId] = log;
+             } else if (weight === currentMaxWeight) {
+               // tie, check reps
+               const reps = parseInt(log.reps || '0', 10) || 0;
+               const currentMaxReps = parseInt(currentMax.reps || '0', 10) || 0;
+               if (reps > currentMaxReps) {
+                 maxLogsByClient[log.clientId] = log;
+               }
+             }
+          }
+        });
+
+        const newEntries: LeaderboardEntry[] = [];
+
+        Object.values(maxLogsByClient).forEach(log => {
+           if (!log.clientId) return;
+           const client = clients.find(c => c.id === log.clientId);
+           if (!client) return;
+           
+           const cSettings = settingsMap[log.clientId];
+           let gapValue = -1;
+           let setupStr = 'Standard';
+
+           if (cSettings && cSettings.settings) {
+             const gapStr = cSettings.settings['Gap'] || cSettings.settings['Gap Option'] || '';
+             const match = gapStr.match(/\d+/);
+             if (match) {
+               gapValue = parseInt(match[0], 10);
+               setupStr = `Gap ${gapValue}`;
+             } else {
+               gapValue = 0;
+               setupStr = 'Gap 0';
+             }
+           } else {
+             // Default to gap 0 if not specified
+             gapValue = 0;
+             setupStr = 'Gap 0';
+           }
+
+           const maxWeight = parseInt(log.weight || '0', 10) || 0;
+           const initialWeight = firstWeightByClient[log.clientId] || maxWeight;
+           let strengthGainPercent = 0;
+           if (initialWeight > 0 && maxWeight > initialWeight) {
+              strengthGainPercent = Math.round(((maxWeight - initialWeight) / initialWeight) * 100);
+           }
+
+           newEntries.push({
+             id: client.id!,
+             name: `${client.firstName} ${client.lastName.charAt(0)}`,
+             weight: maxWeight,
+             initialWeight,
+             strengthGainPercent,
+             reps: parseInt(log.reps || '0', 10) || 0,
+             gap: gapValue,
+             setup: setupStr,
+             occupation: client.occupation || 'Unspecified',
+             occupationCategory: OCCUPATIONS.find(o => o.title === client.occupation)?.category || 'Other',
+             age: client.age || 0,
+             gender: client.gender?.startsWith('M') ? 'M' : client.gender?.startsWith('F') ? 'F' : 'O',
+             timeUnderLoad: parseInt(log.seconds || '0', 10) || 0,
+             date: log.createdAt?.toDate ? log.createdAt.toDate().toISOString() : new Date().toISOString()
+           });
+        });
+
+        setAllEntries(newEntries);
+
+      } catch (err) {
+        handleFirestoreError(err, OperationType.GET, 'exerciseLogs/clientMachineSettings for Leaderboard');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchLeaderboardData();
+  }, [selectedMachine, clients]);
 
   // Filtering Logic
   const filteredEntries = useMemo(() => {
@@ -236,15 +377,20 @@ export function MachineLeaderboardDashboard({ onBack }: { onBack?: () => void })
         return true;
       })
       .sort((a, b) => {
-        // Primary: Weight
-        if (b.weight !== a.weight) return b.weight - a.weight;
-        // Secondary: Reps
-        if (b.reps !== a.reps) return b.reps - a.reps;
-        // Tertiary: Time Under Load
-        return (b.timeUnderLoad || 0) - (a.timeUnderLoad || 0);
+        if (sortBy === 'gain') {
+          if (b.strengthGainPercent !== a.strengthGainPercent) return b.strengthGainPercent - a.strengthGainPercent;
+          return b.weight - a.weight;
+        } else {
+          // Primary: Weight
+          if (b.weight !== a.weight) return b.weight - a.weight;
+          // Secondary: Reps
+          if (b.reps !== a.reps) return b.reps - a.reps;
+          // Tertiary: Time Under Load
+          return (b.timeUnderLoad || 0) - (a.timeUnderLoad || 0);
+        }
       })
       .slice(0, 20); // Top 20 for the dashboard
-  }, [allEntries, gapFilter, occupationFilter, ageFilter, genderFilter, searchQuery]);
+  }, [allEntries, gapFilter, occupationFilter, ageFilter, genderFilter, searchQuery, sortBy]);
 
   const topThree = filteredEntries.slice(0, 3);
   const others = filteredEntries.slice(3);
@@ -274,7 +420,7 @@ export function MachineLeaderboardDashboard({ onBack }: { onBack?: () => void })
                 <Trophy className="w-6 h-6 text-[#F06C22]" />
               </div>
               <div>
-                <h1 className="text-2xl font-black uppercase tracking-tighter italic">Machine Performance Leaderboard</h1>
+                <h1 className="text-2xl font-black uppercase tracking-tighter italic">Machine Performance</h1>
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
                   <BarChart3 className="w-3 h-3" />
                   Clinical Ranking Distribution Analyzer
@@ -283,6 +429,26 @@ export function MachineLeaderboardDashboard({ onBack }: { onBack?: () => void })
             </div>
 
             <div className="flex gap-2 w-full md:w-auto">
+               <div className="flex bg-slate-800 rounded-xl p-1 border border-slate-700">
+                  <button 
+                    onClick={() => setSortBy('weight')}
+                    className={cn(
+                      "px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
+                      sortBy === 'weight' ? "bg-[#38BDF8] text-[#0A2E46]" : "text-slate-400 hover:text-white"
+                    )}
+                  >
+                    Max Weight
+                  </button>
+                  <button 
+                    onClick={() => setSortBy('gain')}
+                    className={cn(
+                      "px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
+                      sortBy === 'gain' ? "bg-[#F06C22] text-white" : "text-slate-400 hover:text-white"
+                    )}
+                  >
+                    Strength Gain %
+                  </button>
+               </div>
                <div className="relative flex-1 md:w-64">
                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                  <input 
@@ -393,8 +559,17 @@ export function MachineLeaderboardDashboard({ onBack }: { onBack?: () => void })
       <main className="flex-1 overflow-y-auto p-6 md:p-8">
         <div className="max-w-7xl mx-auto space-y-10">
           
-          {/* Top 3 Podium Section */}
-          <section>
+          {isLoading ? (
+            <div className="py-20 text-center">
+              <Sparkles className="w-10 h-10 text-[#F06C22] mx-auto mb-4 animate-pulse opacity-50" />
+              <p className="text-sm font-bold text-slate-500 uppercase tracking-widest leading-relaxed">
+                Loading Leaderboard Data...
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Top 3 Podium Section */}
+              <section>
             <h2 className="text-[10px] font-black uppercase tracking-[0.25em] text-[#38BDF8] mb-6 flex items-center gap-3">
               <Sparkles className="w-4 h-4 fill-[#38BDF8]/20" />
               Elite Performance Tier
@@ -440,8 +615,17 @@ export function MachineLeaderboardDashboard({ onBack }: { onBack?: () => void })
 
                     <div className="mt-auto space-y-1">
                       <div className="text-4xl font-black text-white italic tracking-tighter leading-none">
-                        {entry.weight} <span className="text-[12px] font-bold uppercase text-slate-500 not-italic tracking-widest">LBS</span>
+                        {sortBy === 'gain' ? (
+                          <>+{entry.strengthGainPercent}<span className="text-[12px] font-bold uppercase text-slate-500 not-italic tracking-widest">%</span></>
+                        ) : (
+                          <>{entry.weight} <span className="text-[12px] font-bold uppercase text-slate-500 not-italic tracking-widest">LBS</span></>
+                        )}
                       </div>
+                      {sortBy === 'gain' && entry.initialWeight > 0 && (
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pb-1">
+                          From {entry.initialWeight} LBS to {entry.weight} LBS
+                        </div>
+                      )}
                       <div className="py-2 px-4 bg-[#0A2E46] border border-[#38BDF8]/20 rounded-xl inline-flex items-center gap-3">
                          <span className="text-[10px] font-black uppercase text-[#38BDF8] tracking-widest">G:{entry.gap} • {entry.reps} REPS</span>
                          <div className="w-1 h-1 rounded-full bg-slate-600" />
@@ -477,7 +661,7 @@ export function MachineLeaderboardDashboard({ onBack }: { onBack?: () => void })
                </div>
 
                <div className="bg-slate-900/50 border border-white/5 rounded-[32px] p-6 shadow-xl">
-                 <LeaderboardChart data={filteredEntries} />
+                 <LeaderboardChart data={filteredEntries} sortBy={sortBy} />
                </div>
 
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -501,9 +685,15 @@ export function MachineLeaderboardDashboard({ onBack }: { onBack?: () => void })
                         </div>
                      </div>
                      <div className="text-right">
-                       <p className="text-lg font-black text-white leading-none">{entry.weight} LBS</p>
+                       <p className="text-lg font-black text-white leading-none">
+                         {sortBy === 'gain' ? `+${entry.strengthGainPercent}%` : `${entry.weight} LBS`}
+                       </p>
                        <p className="text-[9px] font-bold text-[#F06C22] uppercase tracking-widest mt-1">
-                         G:{entry.gap} • {entry.reps} REPS
+                         {sortBy === 'gain' && entry.initialWeight > 0 ? (
+                           <>FROM {entry.initialWeight} LBS</>
+                         ) : (
+                           <>G:{entry.gap} • {entry.reps} REPS</>
+                         )}
                        </p>
                      </div>
                    </motion.div>
@@ -580,6 +770,8 @@ export function MachineLeaderboardDashboard({ onBack }: { onBack?: () => void })
                </div>
             </div>
           </section>
+          </>
+          )}
         </div>
       </main>
 

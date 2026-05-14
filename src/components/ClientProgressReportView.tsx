@@ -609,8 +609,8 @@ export function ClientProgressReportView({
         <style>{`
           @media print {
             @page { size: portrait; margin: 0.5cm; }
-            body { background: white !important; color: black !important; }
-            .print-area { padding: 0 !important; margin: 0 !important; max-width: none !important; background: white !important; width: 100% !important; }
+            body { background: white !important; color: black !important; font-size: 11px !important; }
+            .print-area { padding: 0 !important; margin: 0 !important; max-width: none !important; background: white !important; width: 100% !important; zoom: 0.8; }
             .no-print { display: none !important; }
             .report-card { border: none !important; box-shadow: none !important; background: white !important; color: black !important; padding: 0 !important; border-radius: 0 !important; }
             .bg-[#0A2E46] { background: white !important; }
@@ -620,15 +620,25 @@ export function ClientProgressReportView({
             .shadow-2xl, .shadow-xl, .shadow-lg { box-shadow: none !important; }
             .border-white\\/10 { border-color: #eee !important; }
             .text-[#F06C22] { color: #D95B16 !important; font-weight: 900 !important; }
-            .bg-[#F06C22] { background: #D95B16 !important; color: white !important; }
-            .rounded-[30px], .rounded-[40px] { border-radius: 1rem !important; }
-            h1 { font-size: 2.2rem !important; }
-            h2 { font-size: 1.2rem !important; }
-            h3 { font-size: 1rem !important; }
-            h4 { font-size: 0.85rem !important; }
+            .bg-[#F06C22] { background: #D95B16 !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .bg-emerald-500 { background-color: #10B981 !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .bg-amber-400 { background-color: #FBBF24 !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .bg-rose-500 { background-color: #F43F5E !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .rounded-[30px], .rounded-[40px] { border-radius: 0.5rem !important; }
+            h1 { font-size: 1.8rem !important; margin-bottom: 0.25rem !important; }
+            h2 { font-size: 1.1rem !important; margin-bottom: 0.25rem !important; }
+            h3 { font-size: 0.9rem !important; margin-bottom: 0.25rem !important; }
+            h4 { font-size: 0.75rem !important; margin-bottom: 0.25rem !important; }
             p, span { font-size: 0.7rem !important; }
+            .space-y-4 > * + * { margin-top: 0.5rem !important; }
+            .space-y-6 > * + * { margin-top: 0.75rem !important; }
             .scale-indicator { gap: 2px !important; }
             .scale-block { height: 6px !important; border-radius: 2px !important; }
+            .gap-3 { gap: 0.5rem !important; }
+            .gap-4 { gap: 0.75rem !important; }
+            .p-4 { padding: 0.5rem !important; }
+            .p-5, .p-6 { padding: 0.75rem !important; }
+            .pb-4 { padding-bottom: 0.5rem !important; }
           }
         `}</style>
 
@@ -922,36 +932,52 @@ export function ClientProgressReportView({
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {(["posture", "pace", "path", "purpose"] as const).map((p) => {
-                  const score = report.performanceMatrix[p]?.score ?? 100;
+                  const matrixItem = report.performanceMatrix?.[p];
+                  const score = matrixItem?.score ?? 100;
                   const rank = Math.round(score / 20) || 1;
                   const data = FOUR_PILLARS_DATA[p];
+                  
+                  let colorClasses = { text: "text-emerald-500", bg: "bg-emerald-500" };
+                  if (rank === 1) colorClasses = { text: "text-rose-500", bg: "bg-rose-500" };
+                  else if (rank === 2 || rank === 3) colorClasses = { text: "text-amber-400", bg: "bg-amber-400" };
 
                   return (
                     <div
                       key={p}
                       className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10 flex flex-col justify-between print:bg-white print:border-slate-100 shadow-xl print:shadow-none"
                     >
-                      <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-white print:text-[#0A2E46]">
-                        {data.title}
-                      </h4>
-                      <div className="mt-4 flex flex-col gap-1.5">
-                        <span className="text-[10px] font-black italic text-[#F06C22]">
-                          {rank} / 5
-                        </span>
-                        <div className="flex gap-0.5">
-                          {[1, 2, 3, 4, 5].map((step) => (
-                            <div
-                              key={step}
-                              className={cn(
-                                "w-full h-1.5 rounded-[1px] transition-all",
-                                step <= rank
-                                  ? "bg-[#F06C22]"
-                                  : "bg-white/5 print:bg-slate-100",
-                              )}
-                            />
-                          ))}
+                      <div>
+                        <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-white print:text-[#0A2E46]">
+                          {data.title}
+                        </h4>
+                        
+                        <div className="mt-4 flex flex-col gap-1.5">
+                          <span className={cn("text-[10px] font-black italic", colorClasses.text)}>
+                            {rank} / 5
+                          </span>
+                          <div className="flex gap-0.5">
+                            {[1, 2, 3, 4, 5].map((step) => (
+                              <div
+                                key={step}
+                                className={cn(
+                                  "w-full h-1.5 rounded-[1px] transition-all print:border print:border-slate-200",
+                                  step <= rank
+                                    ? colorClasses.bg
+                                    : "bg-white/5 print:bg-transparent",
+                                )}
+                              />
+                            ))}
+                          </div>
                         </div>
                       </div>
+                      
+                      {matrixItem?.note && (
+                        <div className="mt-3 bg-black/20 p-2 rounded-lg border border-white/5 print:bg-slate-50 print:border-slate-100">
+                          <p className="text-[8px] font-bold text-white/80 leading-relaxed italic print:text-slate-600">
+                            "{matrixItem.note}"
+                          </p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1524,6 +1550,10 @@ export function ClientProgressReportView({
                 const included = (
                   report.performanceMatrix.includedNotes || []
                 ).includes(talkingPoint);
+                
+                let colorClasses = { text: "text-emerald-500", bg: "bg-emerald-500", border: "border-emerald-500" };
+                if (rank === 1) colorClasses = { text: "text-rose-500", bg: "bg-rose-500", border: "border-rose-500" };
+                else if (rank === 2 || rank === 3) colorClasses = { text: "text-amber-400", bg: "bg-amber-400", border: "border-amber-400" };
 
                 return (
                   <div
@@ -1540,7 +1570,7 @@ export function ClientProgressReportView({
                     </div>
 
                     <div className="space-y-3">
-                      <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-[#F06C22]">
+                      <div className={cn("flex justify-between items-center text-[10px] font-black uppercase tracking-widest", colorClasses.text)}>
                         <span>Rank</span>
                         <span className="text-sm">{rank} / 5</span>
                       </div>
@@ -1563,12 +1593,33 @@ export function ClientProgressReportView({
                             className={cn(
                               "flex-1 h-8 rounded-lg transition-all duration-300 border-2",
                               step <= rank
-                                ? "bg-[#F06C22] border-[#F06C22]"
+                                ? cn(colorClasses.bg, colorClasses.border)
                                 : "bg-slate-900 border-slate-900 hover:border-slate-700",
                             )}
                           />
                         ))}
                       </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                       <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Personalized Note (Optional)</Label>
+                       <Textarea 
+                          value={report.performanceMatrix[p]?.note || ''}
+                          onChange={(e) => {
+                              setReport({
+                                ...report,
+                                performanceMatrix: {
+                                  ...report.performanceMatrix,
+                                  [p]: {
+                                    ...report.performanceMatrix[p],
+                                    note: e.target.value,
+                                  },
+                                },
+                              });
+                          }}
+                          placeholder={`Add a specific note about their ${data.title.toLowerCase()}...`}
+                          className="bg-slate-900 border-slate-700 text-sm h-16 resize-none focus:border-slate-500 rounded-xl placeholder:text-slate-600 italic text-white"
+                       />
                     </div>
 
                     <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 flex-1 flex flex-col justify-between gap-4">

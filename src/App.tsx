@@ -1313,13 +1313,18 @@ export default function App() {
               />
             )}
             {currentView === 'machine-knowledge' && (
-              <MachineKnowledgeDashboard setView={(view) => {
+              <MachineKnowledgeDashboard 
+                 machines={machines}
+                 setView={(view) => {
                 if (view === 'leaderboard') setLeaderboardReturnView('machine-knowledge');
                 setView(view);
               }} />
             )}
             {currentView === 'leaderboard' && (
-              <MachineLeaderboardDashboard onBack={() => setCurrentView(leaderboardReturnView)} />
+              <MachineLeaderboardDashboard 
+                clients={clients} 
+                onBack={() => setCurrentView(leaderboardReturnView)} 
+              />
             )}
             {currentView === 'machines' && (
               <MachinesView 
