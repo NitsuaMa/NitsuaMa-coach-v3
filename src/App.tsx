@@ -5710,6 +5710,29 @@ function WorkoutTrackerView({
                 lastPerformedSessionNumber: currentSession.sessionNumber,
                 lastSessionId: currentSession.id
              });
+             
+             // Update clientMachineSettings currentWeight
+             if (log.weight && log.machineId) {
+                const settingId = `${selectedClient.id}_${log.machineId}`;
+                const settingRef = doc(db, 'clientMachineSettings', settingId);
+                const currentSettingsObj = clientMachineSettings[log.machineId];
+                
+                const updateObj: any = {
+                   clientId: selectedClient.id,
+                   machineId: log.machineId,
+                   settings: currentSettingsObj?.settings || {},
+                   updatedBy: user.uid,
+                   currentWeight: Number(log.weight),
+                   updatedAt: serverTimestamp()
+                };
+                
+                if (!currentSettingsObj?.startingWeight) {
+                    updateObj.startingWeight = Number(log.weight);
+                    updateObj.startingWeightDate = new Date().toISOString();
+                }
+
+                batch.set(settingRef, updateObj, { merge: true });
+             }
           }
         });
 

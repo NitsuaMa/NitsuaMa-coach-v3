@@ -251,6 +251,9 @@ export interface ClientMachineSetting {
   notes?: string;
   machineNotes?: MachineNote[];
   settingsHistory?: SettingsHistoryEntry[];
+  startingWeight?: number;
+  startingWeightDate?: any;
+  currentWeight?: number;
 }
 
 export interface ScheduleEntry {

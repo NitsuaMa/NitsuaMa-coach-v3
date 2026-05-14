@@ -1207,7 +1207,7 @@ export function ClientProfileView({
               value="overview"
               className="flex-1 min-w-[80px] rounded-full border border-slate-200 h-[26px] px-3 font-black uppercase text-[9px] tracking-widest text-[#68717A] bg-transparent data-[state=active]:border-transparent data-[state=active]:bg-[#115E8D] data-[state=active]:text-white transition-all data-[state=active]:shadow-sm"
             >
-              Matrix
+              Journey
             </TabsTrigger>
             <TabsTrigger
               value="equipment"
@@ -1243,7 +1243,7 @@ export function ClientProfileView({
         </div>
 
         <TabsContent value="equipment">
-           <ClientEquipmentPrescriptions client={client} clientId={clientId} machines={machines} clientSettings={clientSettings} clientBodyWeight={parseInt(client?.weight || '150', 10)} />
+           <ClientEquipmentPrescriptions client={client} clientId={clientId} machines={machines} clientSettings={clientSettings} clientBodyWeight={parseInt(client?.weight || '150', 10)} allLogs={allLogs} />
         </TabsContent>
 
         <TabsContent
@@ -1253,10 +1253,10 @@ export function ClientProfileView({
           <Button
             onClick={() => setShowFullChart(true)}
             size="sm"
-            variant="outline"
-            className="absolute top-1.5 right-1.5 z-10 h-6 px-2 text-[9px] uppercase font-black bg-[#115E8D]/80 hover:bg-white text-white hover:text-[#115E8D] border-white/30 backdrop-blur-sm shadow-sm"
+            variant="ghost"
+            className="absolute top-2 right-2 z-10 h-6 px-3 text-[10px] uppercase font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 bg-white/80 border border-slate-200 shadow-sm backdrop-blur-sm transition-all"
           >
-            <Maximize2 className="w-3 h-3 mr-1" /> Expand
+            <Maximize2 className="w-3 h-3 mr-1.5" /> Expanded Journey
           </Button>
           <div className="w-full h-full overflow-hidden">
             <table className="w-full text-left border-collapse table-fixed select-none min-w-full">
