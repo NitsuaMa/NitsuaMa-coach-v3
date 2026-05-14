@@ -34,21 +34,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isAuthenticated() && request.auth.token.email != null && (
-        // 
-        request.auth.token.email.lower() == "jurgensaj@gmail.com" || 
-        
-      );
-    }
-
-    function isTrainer() {
-      return isAuthenticated() && request.auth.token.email != null && (
-        isAdmin() || 
-        // ADD OTHER TRAINERS 
-      );
-    }
-
     // Updating these legacy functions just in case they are called elsewhere
     function isHardcodedAdmin() {
       return isAdmin();
@@ -57,10 +42,11 @@ service cloud.firestore {
     function getRole() {
       return isAdmin() ? 'admin' : (isTrainer() ? 'trainer' : 'none');
     }
-    }
 
     function isAdmin() {
-      return isAuthenticated();
+      return isAuthenticated() && request.auth.token.email != null && (
+        request.auth.token.email.lower() == "jurgensaj@gmail.com"
+      );
     }
 
     function isTrainer() {
@@ -327,28 +313,28 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if (isAdmin() || isAuthenticated()) && isValidSession(request.resource.data);
       allow update: if (isAdmin() || isAuthenticated()) && isValidSession(request.resource.data);
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isTrainer();
     }
 
     match /exerciseLogs/{logId} {
       allow read: if isAuthenticated();
       allow create: if (isAdmin() || isAuthenticated()) && isValidLog(request.resource.data);
       allow update: if (isAdmin() || isAuthenticated()) && isValidLog(request.resource.data);
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isTrainer();
     }
 
     match /schedules/{scheduleId} {
       allow read: if true;
       allow create: if ('sync_secret' in request.resource.data && request.resource.data.sync_secret == 'STABLE_MASTER_SYNC_TOKEN_2026') || isTrainer();
       allow update: if ('sync_secret' in request.resource.data && request.resource.data.sync_secret == 'STABLE_MASTER_SYNC_TOKEN_2026') || isTrainer();
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isTrainer();
     }
     
     match /sessionNotes/{noteId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidSessionNote(request.resource.data);
       allow update: if isAuthenticated() && isValidSessionNote(request.resource.data);
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isTrainer();
     }
 
     match /users/{userId} {
